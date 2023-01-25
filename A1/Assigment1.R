@@ -1,6 +1,7 @@
 #target - earnings per hour, 4 models
 
 library(tidyverse)
+library(caret)
 df <- read.csv('morg-2014-emp.csv')
 summary(df)
 
@@ -70,19 +71,54 @@ df <- df %>%  mutate(df,
 
 
 ggplot (df, aes(y = wage)) +
-  stat_summary_bin(aes(x = age)) + theme_bw()
+  stat_summary_bin(aes(x = age)) +
+  geom_smooth(aes(x = age), method = 'loess') +
+  theme_bw() 
 
+ggplot (df,aes(y=wage)) +
+  geom_point(aes(x = age)) + 
+  geom_smooth(aes(x = age), method = 'loess') +
+  theme_bw()
 
 ggplot (df, aes(y = wage)) +
-  geom_boxplot(aes(x = edu)) + theme_bw()
+  geom_boxplot(aes(x = edu)) + theme_bw() 
 
 ggplot (df, aes(y = wage)) +
   geom_boxplot(aes(x = as.factor(ownchild))) + theme_bw()
 
 
-model1 <- lm(wage ~ age, data = df)
-model2 <- lm(wage ~ age + gender, data = df)
-model3 <- lm(wage ~ age + gender + edu, data = df)
-model4 <- lm(wage ~ age + gender + edu + ownchild, data = df)
+model1 <- as.formula(wage ~ age)
+model2 <- as.formula(wage ~ age + gender)
+model3 <- as.formula(wage ~ age + gender + edu)
+model4 <- as.formula(wage ~ age + gender + edu + ownchild)
 
-modelsummary::msummary(list(model1,model2,model3, model4))
+
+
+
+reg1 <- lm(wage ~ age, data = df)
+reg2 <- lm(wage ~ age + gender, data = df)
+reg3 <- lm(wage ~ age + gender + edu, data = df)
+reg4 <- lm(wage ~ age + gender + edu + ownchild, data = df)
+
+modelsummary::msummary(list(reg1,reg2,reg3, reg4))
+
+# Cross-validation
+
+# set number of folds
+k <- 4
+
+set.seed(42)
+cv1 <- train(wage ~ age, df, method = "lm", trControl = trainControl(method = "cv", number = k))
+set.seed(42)
+cv2 <- train(model2, df, method = "lm", trControl = trainControl(method = "cv", number = k))
+set.seed(42)
+cv3 <- train(model3, df, method = "lm", trControl = trainControl(method = "cv", number = k))
+set.seed(42)
+cv4 <- train(model4, df, method = "lm", trControl = trainControl(method = "cv", number = k))
+
+data.frame(c("model","RMSE","CV RMSE", "BIC"),
+           c("1",RMSE()))
+
+BIC(reg1)
+RMSE(predict(reg1))
+modelsum$
