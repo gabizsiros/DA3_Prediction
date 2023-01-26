@@ -1,9 +1,12 @@
 #target - earnings per hour, 4 models
 
+setwd("C:/Users/Gabi/Desktop/CEU/DA3_Prediction/A1/")
 library(tidyverse)
 library(caret)
 df <- read.csv('morg-2014-emp.csv')
 summary(df)
+
+
 
 
 #Selecting marketing and sales managers occ2012 = 50
@@ -93,7 +96,7 @@ model3 <- as.formula(wage ~ age + gender + edu)
 model4 <- as.formula(wage ~ age + gender + edu + ownchild)
 
 
-
+models <- c("reg1", "reg2","reg3", "reg4")
 
 reg1 <- lm(wage ~ age, data = df)
 reg2 <- lm(wage ~ age + gender, data = df)
@@ -116,9 +119,44 @@ cv3 <- train(model3, df, method = "lm", trControl = trainControl(method = "cv", 
 set.seed(42)
 cv4 <- train(model4, df, method = "lm", trControl = trainControl(method = "cv", number = k))
 
-data.frame(c("model","RMSE","CV RMSE", "BIC"),
-           c("1",RMSE()))
+cv <- c("cv1", "cv2", "cv3", "cv4")
 
-BIC(reg1)
-RMSE(predict(reg1))
-modelsum$
+#Compare model performance of these models 
+#(a) RMSE in the full sample, 
+#(2) cross-validated RMSE and 
+#(c) BIC in the full sample. 
+
+
+library(data.table)
+
+
+summary <- data.frame()
+
+
+for(i in 1:4) {
+  summary[i,] <-  data.table(
+        c(i),
+    c(RMSE(predict(get(models[i])),get(models[i])$model$wage)),
+    c(get(cv[i])$results$RMSE),
+    c(BIC(get(models[i])))
+  )
+}
+
+colnames(summary) <- c("Model","RMSE","CV RMSE","BIC")
+
+ggplot(summary,aes(x= Model)) +
+  geom_line(aes(y= RMSE), color = 'green')+
+  geom_line(aes(y= `CV RMSE`), color = 'red')+
+  #geom_line(aes(y= BIC), color = 'blue')+
+  theme_bw()
+
+prediction <- data.table(Prediction = c(predict(reg1),predict(reg2),predict(reg3),predict(reg4)),
+                         Actual = c(reg1$model$wage,reg2$model$wage,reg3$model$wage,reg4$model$wage),
+                         Model = c('Model1','Model2','Model3','Model4'))
+
+
+ggplot(prediction)+
+  geom_point(aes(x = Prediction, y = Actual, color = Model)) +
+  geom_abline(intercept = 0, slope = 1,color = 'black' ,linetype = 'dashed')+
+  facet_grid(~Model)+
+  theme_bw()
