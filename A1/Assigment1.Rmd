@@ -11,7 +11,7 @@ output:
 knitr::opts_chunk$set(echo = F, message = F, warning = F, results = 'hide')
 ```
 In this exercise I am taking one particular occupation group of the CPS dataset, __Marketing and Sales Managers__ (occupational code: 50). This selection results in 1033 observations. 
-The salary is captured as weekly earnings in the data set (`earnwke`), completed by usual work hours (`uhourse`). Based on these two, I introduce a calculated variable called `wage`, showing the hourly earnings. Sex, children in household, marital status, ethnic groups, race and State within US is also camptured, while`grade92` signifies the highest completed educational grade. 
+The salary is captured as weekly earnings in the data set (`earnwke`), completed by usual work hours (`uhourse`). Based on these two, I introduce a calculated variable called `wage`, showing the hourly earnings. Sex, children in household, marital status, ethnic groups, race and State within US is also captured, while`grade92` signifies the highest completed educational grade. 
 
 ```{r}
 #target - earnings per hour, 4 models
@@ -216,6 +216,7 @@ ggplot(summary, aes(x= Model)) +
   scale_color_manual(name = "Lines", values = c("green" = "RMSE", "red" = "CV RMSE"), labels = c("RMSE", "CV RMSE"))
 
 ```
+
 
 
 
