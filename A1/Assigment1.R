@@ -1,5 +1,6 @@
 #target - earnings per hour, 4 models
 
+rm(list=ls())
 setwd("C:/Users/Gabi/Desktop/CEU/DA3_Prediction/A1/")
 library(tidyverse)
 library(caret)
@@ -7,7 +8,7 @@ df <- read.csv('morg-2014-emp.csv')
 summary(df)
 
 
-
+## Feature enigeneering
 
 #Selecting marketing and sales managers occ2012 = 50
 df <-  df %>%  filter(occ2012 == 50)
@@ -72,6 +73,7 @@ df <- df %>%  mutate(df,
                      gender = factor(df$sex, levels = c(1,2), labels = c('male','female')),
                      .after = sex)
 
+## Graphical data overview
 
 ggplot (df, aes(y = wage)) +
   stat_summary_bin(aes(x = age)) +
@@ -84,24 +86,45 @@ ggplot (df,aes(y=wage)) +
   theme_bw()
 
 ggplot (df, aes(y = wage)) +
-  geom_boxplot(aes(x = edu)) + theme_bw() 
+  geom_boxplot(aes(x = edu, fill = gender)) + theme_bw() +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_x_discrete(labels = c("Undergrad", "University", "Phd")) +
+  labs(x = "",y = "Earning per week ($)", title = "Earnings per week factoring gender and eduction") +
+  theme(legend.position = c(0.35,0.85))
 
 ggplot (df, aes(y = wage)) +
   geom_boxplot(aes(x = as.factor(ownchild))) + theme_bw()
 
 
+
+
+
+###heatmap 
+library(Hmisc)
+
+#setting up correlation matrix. occupation has to be dropped since it is a constant in this sample and the martix results in Na
+correlation <- rcorr(as.matrix(select(df,-occ2012 & where(is.numeric))))
+
+heatmap(correlation$r)
+
+
+heatmap(cor(as.matrix(select(df,-c(occ2012,ethnic) & where(is.numeric)))))
+
+
+
 model1 <- as.formula(wage ~ age)
 model2 <- as.formula(wage ~ age + gender)
 model3 <- as.formula(wage ~ age + gender + edu)
-model4 <- as.formula(wage ~ age + gender + edu + ownchild)
+model4 <- as.formula(wage ~ age + gender + edu  + uhours)
 
-
-models <- c("reg1", "reg2","reg3", "reg4")
 
 reg1 <- lm(wage ~ age, data = df)
 reg2 <- lm(wage ~ age + gender, data = df)
 reg3 <- lm(wage ~ age + gender + edu, data = df)
-reg4 <- lm(wage ~ age + gender + edu + ownchild, data = df)
+reg4 <- lm(wage ~ age + gender + edu + uhours, data = df)
+
+
+models <- c("reg1", "reg2","reg3", "reg4")
 
 modelsummary::msummary(list(reg1,reg2,reg3, reg4))
 
@@ -130,19 +153,17 @@ cv <- c("cv1", "cv2", "cv3", "cv4")
 library(data.table)
 
 
-summary <- data.frame()
-
-
+summary <- data.table(Model = integer(), RMSE = double(), `CV RMSE` = double(), BIC = double())
 for(i in 1:4) {
-  summary[i,] <-  data.table(
-        c(i),
-    c(RMSE(predict(get(models[i])),get(models[i])$model$wage)),
-    c(get(cv[i])$results$RMSE),
-    c(BIC(get(models[i])))
-  )
+  summary <- rbind(summary,  data.table(
+    Model = i,
+    RMSE = RMSE(predict(get(models[i])),get(models[i])$model$wage),
+    `CV RMSE` = get(cv[i])$results$RMSE,
+    BIC = BIC(get(models[i]))
+  ))
 }
 
-colnames(summary) <- c("Model","RMSE","CV RMSE","BIC")
+print(summary)
 
 ggplot(summary,aes(x= Model)) +
   geom_line(aes(y= RMSE), color = 'green')+

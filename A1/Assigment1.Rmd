@@ -1,0 +1,225 @@
+---
+title: "Assignment 1"
+author: "Zsiros, Gabriella"
+date: "2023-01-26"
+output: 
+  pdf_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, message = F, warning = F, results = 'hide')
+```
+In this exercise I am taking one particular occupation group of the CPS dataset, __Marketing and Sales Managers__ (occupational code: 50). This selection results in 1033 observations. 
+The salary is captured as weekly earnings in the data set (`earnwke`), completed by usual work hours (`uhourse`). Based on these two, I introduce a calculated variable called `wage`, showing the hourly earnings. Sex, children in household, marital status, ethnic groups, race and State within US is also camptured, while`grade92` signifies the highest completed educational grade. 
+
+```{r}
+#target - earnings per hour, 4 models
+
+library(tidyverse)
+library(caret)
+library(Hmisc)
+library(data.table)
+library(cowplot)
+library(kableExtra)
+df <- read.csv('morg-2014-emp.csv')
+
+
+
+## Feature enigeneering
+
+#Selecting marketing and sales managers occ2012 = 50
+df <-  df %>%  filter(occ2012 == 50)
+
+#adding wage
+df <- df %>% 
+  mutate(wage =earnwke/uhours)
+
+
+```
+A closed look at the educational distribution shows that the majority of the data is between grades 39 and 44, meaning that the highest education level is between High school and MA University degree, so I am taking these observations in the sample. 
+```{r, results='markup'}
+education <- fct_count(as.factor(df$grade92), prop = T)
+colnames(education) <- c("Education grade", "Observations","Proportion")
+kableExtra::kable(education, format = 'latex') %>% kable_styling(position = "center")
+
+df <-  df %>% filter(grade92 > 38 & grade92 < 45)
+
+```
+A closer look at the ethnic groups shows 94% missing data, other variables mostly do not contain missing values. Extreme values in age are not sowing up anymore, since the education is already filtered. 
+
+```{r, results='markup'}
+
+wagesummary <- df %>% summarise(
+  Frequency=n(),
+  Min = min(wage),
+  P1 = quantile(wage, 0.01), 
+  D1 = quantile(wage, 0.1), 
+  Q1 = quantile(wage, 0.25), 
+  Me = quantile(wage, 0.5), 
+  Q3 = quantile(wage, 0.75), 
+  D9 = quantile(wage, 0.9), 
+  P99 = quantile(wage, 0.99),
+  Max = max(wage))  
+
+kableExtra::kable(wagesummary )%>% kable_styling(latex_options = "HOLD_position")
+```
+
+A statistical summary of the hourly earnings show some extreme values (1st and 99th percentile) which are dropped from the sample.
+
+```{r}
+df <-  df %>% filter(wage < 73 & wage > 7)
+
+#grade factoring (39-44)
+df <- df %>% mutate(edu = factor(df$grade92,levels = c(39:44), 
+                          labels = c('edu1','edu1',
+                                     'edu2','edu2',
+                                     'edu3','edu3')),
+                    .after = grade92)
+
+df <- df %>%  mutate(df,
+                     gender = factor(df$sex, levels = c(1,2), labels = c('male','female')),
+                     .after = sex)
+
+```
+
+## Variables
+
+Whiel examining the correlations between the variables, we can see perfect or very high collinearity between variabels that more or less explain each other, like `earnwke` or `wage`, since horuly wage is calculated from the former. (`Chldpres` and `ownchild` both represent children in a household, therefore a very high correlation is also expected.)
+Education and age seem to have a higher correlation with the hourly wages than other variables.
+
+```{r, results='markup', fig.height = 4 }
+#setting up correlation matrix. occupation has to be dropped since it is a constant in this sample and the matrix results in Na
+correlation <- rcorr(as.matrix(select(df,-occ2012 & where(is.numeric))))
+
+stats::heatmap(correlation$r,Rowv = NULL, Colv= NULL)
+
+```
+
+
+
+## Graphical data overview
+
+Despite the conclusion of the corrleation matrix, when we plot the data factoring the sex, it shows a visible difference between males and females in the same educational category. 
+
+
+```{r,fig.height = 3}
+ggplot (df, aes(y = wage)) +
+  geom_boxplot(aes(x = edu, fill = gender)) + theme_bw() +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_x_discrete(labels = c("Undergrad", "Associate", "University")) +
+  labs(x = "",y = "Earning per week ($)", title = "Earnings per week factoring gender and eduction") +
+  theme(legend.position = c(0.35,0.85))
+
+```
+
+Lowess fitting shows a great increase until age 40 when we are using statistical summary, but taking a closer look a plotting all the datappoints, 
+
+```{r, fig.height= 3.7}
+sumloess <- ggplot (df, aes( x= age, y = wage)) +
+  geom_smooth(aes(x = age), method = 'loess', ) +
+  stat_summary_bin() +
+  labs(x = "Age",y = "Earning per week ($)", title = "Summary Loess") +
+  theme_bw() 
+
+
+allloess <- ggplot (df, aes( x= age, y = wage)) +
+  geom_point(aes(alpha = 0.5), color = 'orange', show.legend = F) +
+  geom_smooth(aes(x = age), method = 'loess', show.legend = F) +
+  stat_summary_bin() +
+  labs(x = "Age",y = "Earning per week ($)", title = "Detailed Loess") +
+  theme_bw() 
+
+library(cowplot)
+plot_grid(sumloess,allloess)
+
+
+```
+
+## Linear regression models
+
+The first model had only the regression of hourly wage on age and second introduces gender factor.Even if the correlation has not highlighted this variable, based on the plot, it is worth to add to the model. The third is completed by education as a thee level factor and the fourth adds the usual working hours, which can potentially have a significance, since te wage is already standardized. (i.e Those who put more work hours in on a weekly basis, might earn more hourly, not just as an accumulated weekly salary)
+
+```{r}
+model1 <- as.formula(wage ~ age)
+model2 <- as.formula(wage ~ age + gender)
+model3 <- as.formula(wage ~ age + gender + edu)
+model4 <- as.formula(wage ~ age + gender + edu  + uhours)
+
+
+reg1 <- lm(wage ~ age, data = df)
+reg2 <- lm(wage ~ age + gender, data = df)
+reg3 <- lm(wage ~ age + gender + edu, data = df)
+reg4 <- lm(wage ~ age + gender + edu + uhours, data = df)
+
+
+models <- c("reg1", "reg2","reg3", "reg4")
+
+```
+The model shows that adjusted R2 is decreasing with each variable, although the difference between Model 3 and 4 is very low. RMSE remains the same, but BIC shows a slight increase, indicating a potential over fitting. 
+
+```{r, results='markup'}
+modelsummary::msummary(list(reg1,reg2,reg3, reg4), got_omit = c('Log.Lik.','F'),conf_level = NULL,
+                       gof_omit= "Log.Lik.",
+                       output = 'kableExtra') %>% kable_styling(latex_options = "HOLD_position")
+```
+
+
+## Cross-validation
+
+During cross validation, I split the dataset into 4 folds, each of them containing a different training section. 
+```{r}
+
+# set number of folds
+k <- 4
+
+set.seed(42)
+cv1 <- train(wage ~ age, df, method = "lm", trControl = trainControl(method = "cv", number = k))
+set.seed(42)
+cv2 <- train(model2, df, method = "lm", trControl = trainControl(method = "cv", number = k))
+set.seed(42)
+cv3 <- train(model3, df, method = "lm", trControl = trainControl(method = "cv", number = k))
+set.seed(42)
+cv4 <- train(model4, df, method = "lm", trControl = trainControl(method = "cv", number = k))
+
+cv <- c("cv1", "cv2", "cv3", "cv4")
+
+```
+
+## Model comparison
+
+```{r}
+
+
+summary <- data.table(Model = integer(), RMSE = double(), `CV RMSE` = double(), BIC = double())
+for(i in 1:4) {
+  summary <- rbind(summary,  data.table(
+    Model = i,
+    RMSE = RMSE(predict(get(models[i])),get(models[i])$model$wage),
+    `CV RMSE` = get(cv[i])$results$RMSE,
+    BIC = BIC(get(models[i]))
+  ))
+}
+
+print(summary)
+```
+Comparing the RMSEs of the OLS linear regression  model and the cross validated models, there is little difference in the third and second model based on RMSE, altough Model 3 performs best in BIC.
+```{r, fig.height= 3.7}
+ggplot(summary, aes(x= Model)) +
+  geom_line(aes(y= RMSE), color = 'green') +
+  geom_line(aes(y= `CV RMSE`), color = 'red')+
+  scale_y_continuous(name = "RMSEand CV RMSE ")+
+ # geom_line(aes(y= BIC), color = 'blue')+
+  #scale_y_continuous( sec_axis(~ . * 526, name = "BIC")) + 
+  ggtitle("RMSE (green) and Cross Validated RMSE (red)")+
+  theme_bw() +
+  scale_color_manual(name = "Lines", values = c("green" = "RMSE", "red" = "CV RMSE"), labels = c("RMSE", "CV RMSE"))
+
+```
+
+
+
+
+
+
+
