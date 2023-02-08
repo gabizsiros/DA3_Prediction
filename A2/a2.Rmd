@@ -1,16 +1,20 @@
 ---
-title: "Untitled"
-author: "Zsiros, Gabriella"
+title: "Building prediction models for Airbnb bussiness in Rome"
+author: "Zsiros, Gabriella, Asipovich, Hanna"
 date: "2023-02-07"
 output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
 ```
 
 
-```{r}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #Download libraries
 library(tidyverse)
 library(ggplot2)
@@ -29,27 +33,25 @@ if(!require(geosphere)){
 library(ranger)
 ```
 
-
-
-
 ### Introduction
+
 In this assignment we use the airbnb dataset from: http://insideairbnb.com/get-the-data.html We chose the city of Rome with more than 24,000 number of observations. We built 3 models to predict the price of accomodation per night for a midsize apartment and discuss their performance.
 
 #### Data exploration
+
+
 As we explored the datatable, it contains various types of accomodation in Rome. We decided to narrow down our inquiry to apartments by room_type as 'Entire home/apt.' We also make sure to filter the data for the place to accomodate at least 2 people and not more than 6. We manipulate the data on neighborhoods, so that districts('neighbourhood_cleansed') are represented as factor. We further explore the data with datasummaries to identify our possible independet variables of interest. 
 
-```{r}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #Download data
 listings <- read.csv('listings.csv')
 ```
 
-
-### Exploring the data
- ~ we are looking at the diferent variables that can be later used as predictors. One of the important drive was to clean the data in a way that resulst in numerical variables. One of the channleges was the categories of bathrooms, where wa found values as 0, "half" bathrooms or empty data. 
+We are looking at the different variables that can be later used as predictors. One of the important drives was to clean the data in a way that results in numerical variables. One of the challenges was the category of bathrooms, where we found values as 0, "half" bathrooms or empty data. 
  
- Number of minimum nights is also az interesting feature where we could suspect to have outliers with values of more hundard, as minimum number of nichts that can be booked. Long-term nreting of Airbnbs might skew our findings and are not likely to be relevant to the business case. 
+Number of minimum nights is also an interesting feature where we could suspect to have outliers with values of more hundred, as minimum number of nights that can be booked. Long-term renting of Airbnbs might skew our findings and is not likely to be relevant to the business case. 
 
-```{r}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #amenities <- unique(listings$amenities)
 unique(listings$bathrooms_text)
 unique(listings$accommodates)
@@ -61,25 +63,15 @@ listings$minimum_night
 unique(sort(listings$bedrooms))
 ```
 
+We filtered out relevant type of accommodation, as we are only interested in separate apartments for 2-6 people.
 
-
-We filtered out relevant type of accomodation, as we are only interested in separate apartments for 2-6 people.
-```{r}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 apartments<-listings %>% filter(room_type=="Entire home/apt") %>% filter(accommodates>=2)%>% filter(accommodates<=6) #14744 observations
 ```
 
-We kept the following variables to work with: id,
-  neighbourhood=neighbourhood_cleansed,
-  latitude,
-  longitude,
-  accommodates,
-  bathrooms_text,
-  beds,
-  amenities,
-  price,
-  minimum_nights
+We kept the following variables to work with: id, neighbourhood, latitude,longitude, no. of people to accommodate, no. bathrooms, beds, various amenities,price, and minimum_nights.
 
-```{r}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #choosing interesting variables for the datatable and further exploration
 dt<- apartments %>% select(
   id,
@@ -95,21 +87,20 @@ dt<- apartments %>% select(
 
 ```
 
+We cleaned up the district names and factorized them. 
 
-We cleaned up the district names anf factorized them. 
-
-```{r}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 
 #Cleaning data on districts
 dt$neighbourhood <- sub(" .*", "", dt$neighbourhood)
 dt$neighbourhood <- as.factor(dt$neighbourhood)
 ```
 
-When it came to the deicision about the bathroom categorization, we came to the agreement that we disregard whetehre it says private or not, since we already filtered for entire homes. 
-Large number of bathrooms will alos fall out as we get rid of outliers we deem not needed. 
-Missing values were replaced with the median (some NAs were introduced by coercing to number), and the few 0 values were replaced with 1, with the reasoning that they were likely to be errors as most homes for short term rent have bathroom (1 happens to be the median value anyway)
+When it came to the decision about the bathroom categorization, we came to an agreement that we disregard whether it says private or not, since we already filtered for entire homes. 
 
-```{r}
+Large number of bathrooms will also fall out as we get rid of outliers we deem not needed. Missing values were replaced with the median (some NAs were introduced by coercing to number), and the few 0 values were replaced with 1, with the reasoning that they were likely to be errors as most homes for short term rent have bathroom (1 happens to be the median value anyway)
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #Transforming data on available bathrooms in the property into integer
 
 table(dt$bathrooms_text)
@@ -126,8 +117,10 @@ dt <- dt %>%
   )
 
 ```
-Price was tranformed into numeric value and we intrduces some improtant dummies for certain amenities, such as Wifi, free parking and air conditioning
-```{r}
+
+Price was transformed into a numeric value and we introduces some important dummies for certain amenities, such as Wifi, free parking and air conditioning.
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #Transform price into numeric
 dt$price <- as.numeric(gsub("\\$", "", dt$price))
 
@@ -137,8 +130,9 @@ dt$free_parking <- ifelse(grepl("free.*parking", dt$amenities), 1, 0)
 dt$ac <- ifelse(grepl("air.*conditioning", dt$amenities), 1, 0)
 ```
 
-Further inspection on the price revealed some extreme values in the upper 5% percentile. 
-```{r}
+Further inspection on the price revealed some extreme values in the upper 5% percentile, which will be removed as those are likely to be luxury appartments.
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #Deciding on further data cleaning based on short-term or long-term rental.
 summary(dt$minimum_nights)
 quantile(dt$price,c(.01,.05,.1,.25,.5,.75,.9,.95,.99), na.rm = T) 
@@ -156,18 +150,19 @@ dt <- subset(dt, price<= quantile(dt$price, c(.95), na.rm = T))
 summary(dt$price)
 
 ```
+
 Missing price values are replaced by the mean. 
 
-```{r}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #Fill in the missing observations on price with the median
 dt <- dt %>%
   mutate(
     price = ifelse(is.na(dt$price),mean(dt$price, na.rm = T), price))
 ```
 
+Checking distribution of prices.
 
-
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 fig3<-ggplot(dt, aes(x=price)) +
   geom_density(alpha=0.3) +
   theme_bw() +
@@ -181,10 +176,7 @@ fig3
 
 ```
 
-
-
-
-```{r}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 
 fct_count(dt$neighbourhood, sort = T, prop = T) # 56% is in city center
 
@@ -193,8 +185,9 @@ sum(is.na(dt$beds))
 ```
 
 
+#### Data visualisations
 
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 
 #data visualisations
 fig1<- ggplot(
@@ -208,9 +201,9 @@ fig1<- ggplot(
 fig1
 ```
 
-With `geosphere` package we introduce  a numerical value that can represent the location of the apartment other than the factorized neighbourhood. 
+With `geosphere` package we introduce  a numerical value that can represent the location of the apartment other than the factorized neighbourhood to be later used for the "distance to the center" feature.
 
-```{r}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #Loading data on the distance to the center 
 
 long_cent <- 12.496366
@@ -219,11 +212,9 @@ lat_cent <- 41.902782
 dt <- dt %>% mutate(dist = distHaversine(cbind(dt$longitude, dt$latitude), c(long_cent, lat_cent)) / 1000)
 ```
 
+There seems to be a trend with some possible outliers in a long distance. This can be explained by the municipal borders of Rome being at the sea coast, which is also a popular destination and where Fiumicino aiport is located. 
 
-There seems to be a trend with some possible outliers in a long distance. This can be exmaplend by the municipal borders of Rome being on the sea coast, which is alos a popular desitnation and is alos where Fiumicino aiporti located. 
-
-
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 fig2<- ggplot(dt, aes(x = dist, y=price)) +
   stat_summary_bin(bins = 100) +
   theme_bw() +
@@ -236,9 +227,9 @@ fig2<- ggplot(dt, aes(x = dist, y=price)) +
 fig2
 ```
 
+A closer inspection on the data reveals that the majority of the data points are close to the city center with approximately half in the Centro Storico, first district.
 
-A closer inspecion on the data reveals that the majority of the datapoint are cloed to the city center. (approx half is in Centro Storico, first dsitrict )
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 fig4<- ggplot(dt, aes(x = dist, y=price)) +
   geom_point(color = 'purple', alpha = 0.2) +
   geom_smooth(method =  loess, color = 'blue') +
@@ -252,10 +243,9 @@ fig4<- ggplot(dt, aes(x = dist, y=price)) +
 fig4
 ```
 
-
 #### Correlation
 
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 numeric_dt <- keep( dt, is.numeric )
 get_upper_tri <- function(cormat){
   cormat[lower.tri(cormat)]<- NA
@@ -274,19 +264,22 @@ cormat<- ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) +
 print(cormat)
 ```
 
-
 ### Models
 
-#### OLS
+The predictive models of choice are OLS, LASSO and Random Forest. The OLS regression is run according to 4 models of increasing complexity. 
 
-```{r}
+#### 1. OLS
+
+We prepared 4 OLS models with an increasing number of features included. The last model was chosen for further comparison based on best RMSE and BIC. To run the OLS, a 5-fold cross-validation approach was chosen as producing the best results. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 
 #variables: dist, accommodates, wifi, neighborhood, free_parking, ac
 
 model1 <- as.formula(price ~ dist) ##basic model intiuitively on dist 
 model2 <- as.formula(price ~ dist + bathrooms_num + accommodates) ##incl numerical var
 model3 <- as.formula(price ~ dist + bathrooms_num + accommodates + wifi + neighbourhood) ## incl signifacant dummies and factor
-model4 <- as.formula(price ~ dist + bathrooms_num + accommodates + wifi + neighbourhood + ac + free_parking) ## including all interesting vars
+model4 <- as.formula(price ~ dist + bathrooms_num + accommodates + wifi + neighbourhood + ac + free_parking) ## including all interesting variables
 
 reg1 <- lm(model1, data = dt)
 reg2 <- lm(model2, data = dt)
@@ -297,9 +290,9 @@ reg4 <- lm(model4, data = dt)
 models <- c("reg1", "reg2","reg3", "reg4")
 ```
 
-thorughout the corss validations, we set the number of folds at 5
+Through the cross validations, we set the number of folds at 5.
 
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 
 # set number of folds
 
@@ -319,11 +312,7 @@ cv <- c("cv1", "cv2", "cv3", "cv4")
 
 modelsummary::msummary(list(reg1,reg2,reg3, reg4))
 
-
 variables <- c(1,3,5,7)
-
-
-
 
 ols_summary <- data.table(Model = integer(), Variables = integer(), RMSE = double(), MAE = double(), R2 = double(), BIC = double())
 for(i in 1:4) {
@@ -341,20 +330,19 @@ for(i in 1:4) {
 ols_summary 
 ```
 
-our 4th OLS model has the lowerst RMSE
+Our 4th OLS model has the lowest RMSE and will be taken further to be compared between LASSO and Random Forest to find the best predicting model.
 
-```{r}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 ### keep 4th model
 
 ols_summary <- ols_summary[4,]
 ```
 
+#### 2. Lasso
 
+LASSO method is used to ensure a better fit and minimise the sum of squared residuals. It is a regression analysis method that performs both variable selection and regularization in order to enhance the prediction accuracy and interpretability of the resulting statistical model. 
 
-
-#### Lasso
-
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 
 # Set lasso tuning parameters
 train_control <- trainControl(method = "cv", number = k)
@@ -381,7 +369,7 @@ lasso_coeffs <- coef(lasso_model$finalModel, lasso_model$bestTune$lambda) %>%
 print(lasso_coeffs)
 
 ```
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 ## selecting the best model for metrics
 lasso_cv_metrics <- lasso_model$results %>%
   filter(lambda == lasso_model$bestTune$lambda)
@@ -398,12 +386,10 @@ lasso_summary <-  data.table(
 
 ```
 
+#### 3. Random Forest
 
-
-
-#### Random Forest
-
-```{r}
+We later use a boosting algorithm Random Forest to further fine-tune our model. Random Forest tends to perform better than OLS with non-linear patterns in the data, as well as showed us better results on RMSE than LASSO.
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #setting train control
 train_control <- trainControl(method = "cv",
                               number = k,
@@ -412,7 +398,7 @@ train_control <- trainControl(method = "cv",
 
 Tuning is set with several `.mtry` options
 
-```{r}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 set.seed(1927)
 system.time({
   rf_model <- train(
@@ -431,10 +417,9 @@ system.time({
 rf_model
 ```
 
+Random forest best result has 7 predictors when selecting model4 formula, with 7 variables.
 
-Random forest best result has 7 predictors when selecting model4 formula, with 7 variables
-
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 
 forest_summary <- data.table(Model = integer(), Variables = integer(), RMSE = double(), MAE = double(), R2 = double(), BIC = double())
 forest_summary <-  data.table(
@@ -447,13 +432,15 @@ forest_summary <-  data.table(
 
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #leave 4th rf model, .mtry=7
 forest_summary <- forest_summary[4,]
 
 ```
 
-```{r}
+We compare all three models to decide on the best one for our purposes of price setting for a mid-range apartment in Rome.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 diff_models <- c("ols_summary", "lasso_summary", "forest_summary")
 rm(summary_all)
 summary_all <- data.table(Model = integer(), Variables = integer(), 
@@ -472,15 +459,13 @@ summary_all$Model <- c("OLS","LASSO","Random Forest")
 summary_all
 ```
 
+### Extra Task 
 
-
-
-##Extra task 
 ### External validity with different dates
 
 Our analysed dataset comes from a specific date in 13-12-2022 with data going back to one year. What is also available however, is a booking data of future dates, where we can test if our prediction models can predict the prices for the future. 
 
-```{r}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #Loading and cleaning the calendar data
 calendar <- read.csv("calendar.csv")
 calendar <- calendar%>%
@@ -507,10 +492,9 @@ data_extra <- data_extra %>% mutate(OLS_pred = predict(cv4),
 
 ```
 
-After joining our analyzed datatable with the future booking data, we introduced to variable 'future price'.
-Future price has 409 NAs. replacing with mean
+After joining our analyzed datatable with the future booking data, we introduced a variable 'future price'. Future price has 409 NAs, which were replaced with mean value.
 
-```{r}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 data_extra <- data_extra %>%
   mutate(
     future_price = ifelse(is.na(data_extra$future_price),
@@ -521,9 +505,10 @@ data_extra <- data_extra %>%
 summary(data_extra$future_price)
 
 ```
-When summarizing the data we can see that the RMSE is a la lot higher. The order of the model fit didnt change however, random formest performs better than the previous two, with Lasso having slightly better resutls than OLS. 
 
-```{r}
+When summarizing the data we can see that the RMSE is a lot higher. The order of the model fit did not change, however, random formest performs better than the previous two, with Lasso having slightly better results than OLS. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 futureOLS <-  RMSE(data_extra$OLS_pred,data_extra$future_price)
 futureLASSO <- RMSE(data_extra$Lasso_pred,data_extra$future_price)
 futureRF <- RMSE(data_extra$RF_pred,data_extra$future_price)
@@ -537,31 +522,37 @@ valid <- data.frame(
 valid
 ```
 
-Future prices vs prediciton with Random forest. What skews our data are the listings with high prices, which are not freqent but take on extreme values. 
-We can argue that while for the accuracy of future prediction it could have been ebtter to keep our outliers in the ver beginning, but when it comes to the business case, and on how to position the new apartments on the market, being mid-sized apartment without any special feature to our knowledge, it is best to keep our 95% threshold. The skewedness also mean that the future litings will also have outlier that might not be relevant to our buiness case. 
+Future prices vs prediction with Random forest. 
 
-```{r}
+What skews our data are the listings with high prices, which are not frequent but take on extreme values. 
+
+We can argue that while for the accuracy of future prediction it could have been better to keep our outliers in the very beginning, but when it comes to the business case, and on how to position the new apartments on the market, being mid-sized apartment without any special feature to our knowledge, it is best to keep our 95% threshold. The skewness also means that the future listings will also have outliers that might not be relevant to our business case. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 ggplot( data= data_extra, aes(x= future_price))+
   geom_point(aes(y= RF_pred),colour = 'red')+
   geom_abline(intercept = 0, slope = 1,color = 'black' ,linetype = 'dashed')
 ```
-When comparing the prediciotn models we can see that all of our predixtion modesl overestimates the distribution and the frewuency around the mean value. 
 
+When comparing the prediction models we can see that all of our prediction models overestimate the distribution and the frequency around the mean value. 
 
-```{r}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 
 data_extra2 <- data_extra %>% select(price, future_price, OLS_pred,Lasso_pred,RF_pred)
 # Reshape the data into a long format
 data_long <- gather(data_extra2, key = "Series", value = "Price", OLS_pred, Lasso_pred, RF_pred, price, future_price)
+```
 
+Checking out the visual considering future price prediction.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 # Plot the data using ggplot2
 ggplot(data = data_long, aes(x = Price, color = Series)) +
   geom_density() +
   scale_color_manual(values = c("OLS_pred" = "orange", "Lasso_pred" = "blue", "RF_pred" = "red", "price" = "black", "future_price" = "green")) +
   labs(x = "", y = "Price") +
   theme_classic()
-
-
 ```
+
 
 
