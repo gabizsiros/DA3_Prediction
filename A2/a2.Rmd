@@ -566,7 +566,7 @@ group.importance <- function(rf.obj, groups) {
 rf_model_var_imp <- ranger::importance(rf_model$finalModel)/1000
 
 rf_model_var_imp_df <-
-  data.frame(varname = imp = rf_model_var_imp) %>%
+  data.frame(imp = rf_model_var_imp) %>%
   arrange(desc(imp)) %>%
   mutate(imp_percentage = imp/sum(imp))
 
