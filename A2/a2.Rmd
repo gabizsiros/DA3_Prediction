@@ -1,8 +1,8 @@
 ---
 title: "Building prediction models for Airbnb bussiness in Rome"
-author: "Zsiros, Gabriella, Asipovich, Hanna"
+author: "Gabriella Zsiros , Hanna Asipovich"
 date: "2023-02-07"
-output: pdf_document
+output: html_document
 ---
 
 ```{r setup, include=FALSE}
@@ -12,6 +12,8 @@ knitr::opts_chunk$set(
 	warning = FALSE
 )
 knitr::opts_chunk$set(fig.pos = "H", out.extra = "")
+knitr::opts_chunk$set(fig.height = 4)
+knitr::opts_chunk$set(fig.align = 'center')
 ```
 
 
@@ -40,7 +42,7 @@ In this assignment we use the airbnb dataset from: http://insideairbnb.com/get-t
 
 ### Data exploration
 
-As we explored the datatable, it contains various types of accomodation in Rome. We decided to narrow down our inquiry to apartments by room_type as 'Entire home/apt.' We also make sure to filter the data for the place to accomodate at least 2 people and not more than 6. We manipulate the data on neighborhoods, so that districts('neighbourhood_cleansed') are represented as factor. We further explore the data with datasummaries to identify our possible independet variables of interest. 
+As we explored the datatable, it contains various types of accommodation in Rome. We decided to narrow down our inquiry to apartments by room_type as `Entire home/apt`. We also make sure to filter the data for the place to accommodate at least 2 people and not more than 6. We manipulate the data on neighborhoods, so that districts(`neighbourhood_cleansed`) are represented as factor. We further explore the data with datasummaries to identify our possible independent variables of interest. 
 
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 #Download data
@@ -69,7 +71,7 @@ We filtered out relevant type of accommodation, as we are only interested in sep
 apartments<-listings %>% filter(room_type=="Entire home/apt") %>% filter(accommodates>=2)%>% filter(accommodates<=6) #14744 observations
 ```
 
-Based on our initial exploration and domain knowledge, we kept the following variables to work with: id, neighbourhood, latitude,longitude, no. of people to accommodate, no. bathrooms, beds, various amenities,price, and minimum_nights.
+Based on our initial exploration and domain knowledge, we kept the following variables to work with: id, neighborhood, latitude,longitude, no. of people to accommodate, no. bathrooms, beds, various amenities,price, and minimum_nights.
 
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 #choosing interesting variables for the datatable and further exploration
@@ -147,8 +149,11 @@ dt$breakfast <- ifelse(grepl("Breakfast", dt$amenities,ignore.case = TRUE), 1, 0
 Further inspection on the price revealed some extreme values in the upper 5% percentile, which will be removed as those are likely to be luxury apartments.
 
 
-```{r include = TRUE}
-quantile(dt$price,c(.01,.05,.1,.25,.5,.75,.9,.95,.99), na.rm = T) 
+```{r include = FALSE}
+
+knitr::kable(quantile(dt$price,c(.01,.05,.1,.25,.5,.75,.9,.95,.99), na.rm = T), caption = "Price distribution", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' , full_width = F)
+print(quantile(dt$price,c(.01,.05,.1,.25,.5,.75,.9,.95,.99), na.rm = T))
+
 sum(is.na(dt$price))
 
 #Having observed the datasummary on price, we will nor consider extreme values of upper 5%(possibly luxury apartments)
@@ -193,17 +198,16 @@ fig3
 
 ```
 
+When explorint the price relationship with factors, we can see that the neighbourhood has an effect on price. 
 
-### Data visualisations
-
-```{r echo=FALSE, message=FALSE, warning=FALSE, fig.height= 4}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 
 #data visualisations
 fig1<- ggplot(
   data = dt,
   aes(x = neighbourhood, y = price)) +
   geom_boxplot(
-    aes(group = neighbourhood),
+    aes(group = neighbourhood), fill = 'lavender',
     linewidth = 0.5, width = 0.6, alpha = 0.8, na.rm=T,
     outlier.shape = NA)+
   labs(x = "Neighbourhood",y = "Price(in EUR)") +
@@ -212,7 +216,7 @@ fig1
 
 ```
 
-With `geosphere` package we introduce  a numerical value that can represent the location of the apartment other than the factorized neighbourhood to be later used for the "distance to the center" feature.
+With `geosphere` package we introduce  a numerical value that can represent the location of the apartment other than the factorized neighbourhood to be later used for the "distance to the center" feature. Considering that a large par of our listings is located in the first district, **Centro Storico**, we introduced a dummy variable to better facilitate CART based models. 
 
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 #Loading data on the distance to the center 
@@ -261,7 +265,7 @@ fig4<- ggplot(dt, aes(x = dist, y=price)) +
   scale_x_continuous(labels = function (x) {
     paste(formatC(x,format = "d",big.mark =","),"km")
   })+
-  labs(title = 'Price vs Distance from the city center')
+  labs(title = 'Price vs Distance from the city center',x = "Distance", y= "Price")
 fig4
 ```
 
@@ -280,6 +284,7 @@ melted_cormat <- melt(upper_tri, na.rm = TRUE)
 cormat_price <- subset(melted_cormat, grepl("price", Var1) | grepl("price", Var2)) %>% 
   arrange(desc(value))
 
+knitr::kable(cormat_price, caption = "Price correlations", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' , full_width = F)
 
 
 cormat<- ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) +
@@ -303,16 +308,22 @@ cormat_p<- ggplot(data = cormat_price, aes(x=Var1, y=Var2, fill=value)) +
 
 ```
 
-Highest correlations: Bathroom numbers, accomodates, distance, is_center (|.21| - |.37|)
-ac, free parking, wifi (|.16| - |.09|)
-coffeemaker, balcony, breakfast, microwave (|.08| - |.04|)
-longterm booking possible, minimum_nights, self checkin, kitchen. 
+Highest correlations:  
+Bathroom numbers, accomodates, distance, is_center (|.21| - |.37|)  
+ac, free parking, wifi (|.16| - |.09|)  
+coffeemaker, balcony, breakfast, microwave (|.08| - |.04|)  
+longterm booking possible, minimum_nights, self check-in, kitchen. 
 
-(some negatiev correlations does not seem reasonable)
+(some negative correlations does not seem reasonable)
+
+
+## Models
+
+The predictive models of choice are OLS, LASSO and Random Forest. The OLS regression is run according to 4 models of increasing complexity. 
 
 ### Holdout
 
-We create a holdout set from 15% of our cleaned data table, resulting approximately 2000 observations for the holdout. 
+We create a holdout set as a random 15% of our cleaned data table, resulting approximately 2000 observations for the holdout. 
 
 ```{r}
 set.seed(1927)
@@ -324,18 +335,9 @@ data_holdout <- dt[-train_indices, ]
 ```
 
 
-## Models
-
-The predictive models of choice are OLS, LASSO and Random Forest. The OLS regression is run according to 4 models of increasing complexity. 
-
 ### 1. OLS
 
 We prepared 4 OLS models with an increasing number of features included. The last model was chosen for further comparison based on best RMSE and BIC. To run the OLS, a 5-fold cross-validation approach was chosen as producing the best results. 
-
-Highest correlations: Bathroom numbers, accomodates, distance (|.21| - |.37|)
-ac, free parking, wifi (|.16| - |.09|)
-coffeemaker, balcony, breakfast, microwave (|.08| - |.04|)
-longterm booking possible, minimum_nights, self checkin, kitchen. 
 
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
@@ -358,6 +360,7 @@ reg5 <- lm(model5, data = data_train)
 
 models <- c("reg1", "reg2","reg3", "reg4","reg5")
 ```
+
 
 Through the cross validations, we set the number of folds at 5.
 
@@ -384,6 +387,8 @@ cv <- c("cv1", "cv2", "cv3", "cv4", "cv5")
 modelsummary::msummary(list(reg1,reg2,reg3,reg4,reg5), stars = T)
 ```
 
+Our modelsummary confirms the significants of variables through correlations. Factorizing the neighborhoods seems to improve the preformance. 
+
 ```{r}
 variables <- c(4,7,11,15,16)
 
@@ -399,7 +404,7 @@ for(i in 1:5) {
   ))
 }
 
-knitr::kable(ols_summary, caption = "OLS summary", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
+knitr::kable(ols_summary, caption = "OLS summary", digits = 4 ) %>% kable_styling( position = "center", latex_options = 'hold_position' , full_width = F)
 ```
 
 
@@ -417,13 +422,13 @@ best_ols <- ols_summary[5,]
 
 LASSO method is used to ensure a better fit and minimise the sum of squared residuals. It is a regression analysis method that performs both variable selection and regularization in order to enhance the prediction accuracy and interpretability of the resulting statistical model. 
 
-As our second model, we selected LASSO as it penalizes over fitting. 
+As our second model, we selected LASSO as it penalizes over-fitting. The model iterates through various values for lambda, with 0.05 steps between 0 and 1
 
 ```{r echo=FALSE, include = TRUE, message=FALSE, warning=FALSE}
 
 # Set lasso tuning parameters
 train_control <- trainControl(method = "cv", number = k)
-tune_grid <- expand.grid("alpha" = c(1), "lambda" = seq(-1, 1, by = 0.05))
+tune_grid <- expand.grid("alpha" = c(1), "lambda" = seq(0, 1, by = 0.05))
 
 set.seed(1927)
 lasso_model <- caret::train(
@@ -435,7 +440,7 @@ lasso_model <- caret::train(
   tuneGrid = tune_grid,
   na.action=na.exclude)
 
-print(lasso_model$bestTune$lambda)
+print(paste("Best lambda in the various LASSO models: ",lasso_model$bestTune$lambda))
 
 
 
@@ -468,7 +473,7 @@ lasso_summary <-  data.table(
 
 ### 3. Random Forest
 
-We later use a bagging algorithm Random Forest to further fine-tune our model. Random Forest tends to perform better than OLS with non-linear patterns in the data, as well as showed us better results on RMSE than LASSO.
+We later use a bagging algorithm Random Forest to further fine-tune our model. Random Forest tends to perform better than OLS with non-linear patterns in the data, as well as showed us better results on RMSE than LASSO. While OLS and LASSO could handle the neighborhood variables a factors, we decided to focus on the first district as a binary decision point when making the  regression trees. Here we take our model with the most vaiable, which does not contain the neighbourhoods as factors.
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 #setting train control
 train_control <- trainControl(method = "cv",
@@ -476,7 +481,7 @@ train_control <- trainControl(method = "cv",
                               verboseIter = FALSE)
 ```
 
-Tuning is set with several `.mtry` options
+Tuning is set with several `.mtry` options, between 4 and 15.
 
 ```{r message=TRUE, warning=FALSE, include=FALSE}
 set.seed(1927)
@@ -498,23 +503,22 @@ rf_model
 
 ```
 
-Random forest best result has 7 predictors when selecting model4 formula, with 7 variables.
+Random forest best result has 5 predictors when selecting model4 formula (with 15 variables).
 
-```{r echo=TRUE, message=FALSE, warning=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 
 
- forest_summary <- data.table(Model = integer(), Variables = integer(), RMSE = double(), MAE = double(), R2 = double(), BIC = double())
+ forest_summary <- data.table(Model = integer(), Variables = integer(), RMSE = double(), MAE = double(), R2 = double())
 
 forest_summary <-  data.table(
     Model = paste("Random forest"),
     Variables = rf_model$results$mtry,
    RMSE = rf_model$results$RMSE,
   MAE = rf_model$results$MAE,
-  R2 = rf_model$results$Rsquared,
-    BIC = NA)
+  R2 = rf_model$results$Rsquared)
 
 
-knitr::kable( forest_summary, caption = "TITLE", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
+knitr::kable( forest_summary, caption = "Random Forest summary", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position', full_width = F )
 
 ```
 
@@ -542,13 +546,13 @@ for (i in 1:length(diff_models)) {
 
 
 summary_all$Model <- c("OLS","LASSO","Random Forest")
-knitr::kable( summary_all, caption = "TITLE", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
+knitr::kable( summary_all, caption = "Model Summary", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position', full_width = F )
 ```
 
-### Diagnostics
+## Diagnostics
 
 We test the performance of our final chosen model, Random Forest, on the holdout dataset. 
-
+Variable importance shows that distance and location  has high importance, as well as the number of bathrooms and accommodation capacity, which indicate the size of the apartment, followed by the number of minimum nights required variable.
 
 
 ```{r}
@@ -562,16 +566,12 @@ group.importance <- function(rf.obj, groups) {
 rf_model_var_imp <- ranger::importance(rf_model$finalModel)/1000
 
 rf_model_var_imp_df <-
-  data.frame(varname = names(rf_model_var_imp),imp = rf_model_var_imp) %>%
+  data.frame(varname = imp = rf_model_var_imp) %>%
   arrange(desc(imp)) %>%
   mutate(imp_percentage = imp/sum(imp))
 
-print(rf_model_var_imp)
+knitr::kable(rf_model_var_imp_df, caption = "Variable importance", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position', full_width = F )
 ```
-
-
-Out-of-sample performance: RMSE # mean(price) on the holdout set.
-Our
 
 ```{r}
 
@@ -584,18 +584,20 @@ print(paste("RMSE value for the holdout dataset:",RMSE(data_holdout$predicted_pr
 
 
 ```
+Our RMSE on the training sample and the hold-out set are very similar. 
 
-```{r, fig.height= 4, fig.width= 4}
+```{r, fig.height= 4, fig.width= 4, fig.pos = "center"}
 ggplot(data = data_holdout, aes(x = price)) +
   geom_point(aes(y = predicted_price), colour = "red") +
   geom_abline(intercept = 0, slope = 1, color = "black", linetype = "dashed", size = 1.2) +
   xlim(0, 300) +
-  ylim(0, 300)
+  ylim(0, 300) + 
+  theme_bw()
 
 ```
 
 
-##Extra Task 
+## Extra Task 
 
 ### External validity with different dates
 
@@ -642,35 +644,37 @@ summary(data_extra$future_price)
 
 When summarizing the data we can see that the RMSE is a lot higher. The order of the model fit did not change, however, random forest performs better than the previous two, with Lasso having slightly better results than OLS. 
 
-```{r echo=TRUE, message=FALSE, warning=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 futureOLS <-  RMSE(data_extra$OLS_pred,data_extra$future_price)
 futureLASSO <- RMSE(data_extra$Lasso_pred,data_extra$future_price)
 futureRF <- RMSE(data_extra$RF_pred,data_extra$future_price)
 
 valid <- data.frame(
   Model = summary_all$Model,
-  Past_Data_RMSE = summary_all$RMSE,
-  Future_Data_RMSE = c(futureOLS, futureLASSO, futureRF)
+  `Past Data RMSE` = summary_all$RMSE,
+  `Future Data RMSE` = c(futureOLS, futureLASSO, futureRF)
 )
 
 
 
-knitr::kable(valid, caption = "TITLE", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
+knitr::kable(valid, caption = "Model comparison with future data", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position', full_width = F )
 ```
 
-Future prices vs prediction with Random forest. 
+
 
 What skews our data are the listings with high prices, which are not frequent but take on extreme values. 
 
 We can argue that while for the accuracy of future prediction it could have been better to keep our outliers in the very beginning, but when it comes to the business case, and on how to position the new apartments on the market, being mid-sized apartment without any special feature to our knowledge, it is best to keep our 95% threshold. The skewness also means that the future listings will also have outliers that might not be relevant to our business case. 
 
-```{r echo=TRUE, message=FALSE, warning=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.height= 4.5, fig.width= 4.5}
 ggplot( data= data_extra, aes(x= future_price))+
   geom_point(aes(y= RF_pred),colour = 'red')+
-  geom_abline(intercept = 0, slope = 1,color = 'black' ,linetype = 'dashed')
+  geom_abline(intercept = 0, slope = 1,color = 'black' ,linetype = 'dashed')+
+  labs(titel = "Future prices vs prediction with Random forest", x= "Future price", y= "Predicted price")+
+  theme_bw()
 ```
 
-When comparing the prediction models we can see that all of our prediction models overestimate the distribution and the frequency around the mean value. 
+When comparing the prediction models we can see that all of our prediction models overestimate the distribution and the frequency around the mean value, but Random forest captures both the current and future distirbution visibly better.
 
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 
@@ -679,28 +683,13 @@ data_extra2 <- data_extra %>% select(price, future_price, OLS_pred,Lasso_pred,RF
 data_long <- gather(data_extra2, key = "Series", value = "Price", OLS_pred, Lasso_pred, RF_pred, price, future_price)
 ```
 
-Checking out the visual considering future price prediction.
-
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 # Plot the data using ggplot2
 ggplot(data = data_long, aes(x = Price, color = Series)) +
-  geom_density() +
+  geom_density(size = 1) +
   scale_color_manual(values = c("OLS_pred" = "orange", "Lasso_pred" = "blue", "RF_pred" = "red", "price" = "black", "future_price" = "green")) +
   labs(x = "", y = "Price") +
   theme_classic()
 ```
 
-## APPENDIX
-
-```{r}
-print(cormat_price) 
-```
-
-```{r}
-modelsummary::msummary(list(reg1,reg2,reg3,reg4,reg5), stars = T, output = "kableExtra")
-```
-
-```{r}
-print(lasso_coeffs)
-```
 
