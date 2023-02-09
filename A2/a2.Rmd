@@ -34,11 +34,11 @@ if(!require(geosphere)){
 library(ranger)
 ```
 
-### Introduction
+## Introduction
 
 In this assignment we use the airbnb dataset from: http://insideairbnb.com/get-the-data.html We chose the city of Rome with more than 24,000 number of observations. We built 3 models to predict the price of accommodation per night for a midsize apartment and discuss their performance.
 
-#### Data exploration
+### Data exploration
 
 As we explored the datatable, it contains various types of accomodation in Rome. We decided to narrow down our inquiry to apartments by room_type as 'Entire home/apt.' We also make sure to filter the data for the place to accomodate at least 2 people and not more than 6. We manipulate the data on neighborhoods, so that districts('neighbourhood_cleansed') are represented as factor. We further explore the data with datasummaries to identify our possible independet variables of interest. 
 
@@ -179,7 +179,7 @@ dt <- dt %>%
 
 Checking distribution of prices.
 
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE,fig.height= 4}
 fig3<-ggplot(dt, aes(x=price)) +
   geom_density(color = 'purple',alpha=0.3, size = 1.2) +
   theme_bw() +
@@ -194,9 +194,9 @@ fig3
 ```
 
 
-#### Data visualisations
+### Data visualisations
 
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.height= 4}
 
 #data visualisations
 fig1<- ggplot(
@@ -236,7 +236,7 @@ There seems to be a trend with some possible outliers in a long distance. This c
 **(i wouldn't include the distance bin scatter)**
 
 
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE,fig.height= 4}
 fig2<- ggplot(dt, aes(x = dist, y=price)) +
   stat_summary_bin(bins = 100) +
   theme_bw() +
@@ -251,7 +251,7 @@ fig2
 
 A closer inspection on the data reveals that the majority of the data points are close to the city center with approximately half in the Centro Storico, first district.
 
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.height= 4}
 fig4<- ggplot(dt, aes(x = dist, y=price)) +
   geom_point(color = 'purple', alpha = 0.2) +
   geom_smooth(method =  loess, color = 'blue') +
@@ -310,7 +310,7 @@ longterm booking possible, minimum_nights, self checkin, kitchen.
 
 (some negatiev correlations does not seem reasonable)
 
-#### Holdout
+### Holdout
 
 We create a holdout set from 15% of our cleaned data table, resulting approximately 2000 observations for the holdout. 
 
@@ -399,7 +399,7 @@ for(i in 1:5) {
   ))
 }
 
-knitr::kable(ols_summary, caption = "TITLE", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
+knitr::kable(ols_summary, caption = "OLS summary", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
 ```
 
 
@@ -419,7 +419,7 @@ LASSO method is used to ensure a better fit and minimise the sum of squared resi
 
 As our second model, we selected LASSO as it penalizes over fitting. 
 
-```{r echo=TRUE, message=FALSE, warning=FALSE}
+```{r echo=FALSE, include = TRUE, message=FALSE, warning=FALSE}
 
 # Set lasso tuning parameters
 train_control <- trainControl(method = "cv", number = k)
@@ -595,7 +595,7 @@ ggplot(data = data_holdout, aes(x = price)) +
 ```
 
 
-### Extra Task 
+##Extra Task 
 
 ### External validity with different dates
 
@@ -637,9 +637,7 @@ data_extra <- data_extra %>%
                           mean(data_extra$future_price, na.rm = T), 
                           future_price))
 
-knitr::kable(summary(data_extra$future_price), caption = "TITLE", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
-
-
+summary(data_extra$future_price) 
 ```
 
 When summarizing the data we can see that the RMSE is a lot higher. The order of the model fit did not change, however, random forest performs better than the previous two, with Lasso having slightly better results than OLS. 
@@ -692,14 +690,14 @@ ggplot(data = data_long, aes(x = Price, color = Series)) +
   theme_classic()
 ```
 
-### APPENDIX
+## APPENDIX
 
 ```{r}
 print(cormat_price) 
 ```
 
 ```{r}
-modelsummary::msummary(list(reg1,reg2,reg3,reg4,reg5), stars = T, output = kableExtra)
+modelsummary::msummary(list(reg1,reg2,reg3,reg4,reg5), stars = T, output = "kableExtra")
 ```
 
 ```{r}
