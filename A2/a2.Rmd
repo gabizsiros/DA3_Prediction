@@ -11,6 +11,7 @@ knitr::opts_chunk$set(
 	message = FALSE,
 	warning = FALSE
 )
+knitr::opts_chunk$set(fig.pos = "H", out.extra = "")
 ```
 
 
@@ -143,25 +144,28 @@ dt$breakfast <- ifelse(grepl("Breakfast", dt$amenities,ignore.case = TRUE), 1, 0
 
 ```
 
-Further inspection on the price revealed some extreme values in the upper 5% percentile, which will be removed as those are likely to be luxury appartments.
+Further inspection on the price revealed some extreme values in the upper 5% percentile, which will be removed as those are likely to be luxury apartments.
 
-```{r message=FALSE, warning=FALSE, include=FALSE}
-#Deciding on further data cleaning based on short-term or long-term rental.
-summary(dt$minimum_nights)
+
+```{r include = TRUE}
 quantile(dt$price,c(.01,.05,.1,.25,.5,.75,.9,.95,.99), na.rm = T) 
-quantile(dt$minimum_nights,.95) #95% of the data is less or equal than 5 minimum nights
-
-dt <- dt %>% filter(dt$minimum_nights <= 5)
-boxplot(dt$price)
-
 sum(is.na(dt$price))
-
 
 #Having observed the datasummary on price, we will nor consider extreme values of upper 5%(possibly luxury apartments)
 dt <- subset(dt, price <= 269)
 
 summary(dt$price)
+```
 
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+#Deciding on further data cleaning based on short-term or long-term rental.
+
+
+quantile(dt$minimum_nights,.95) #95% of the data is less or equal than 5 minimum nights
+
+dt <- dt %>% filter(dt$minimum_nights <= 5)
+boxplot(dt$price)
 ```
 
 Missing price values are replaced by the mean. 
@@ -184,7 +188,7 @@ fig3<-ggplot(dt, aes(x=price)) +
   scale_x_continuous(labels = function (x) {
     paste(formatC(x,format = "d",big.mark =","),"EUR")
   })+
-  labs(title = 'Price distribution')
+  labs(title = 'Price distribution', x = "Price", y = "")
 fig3
 
 ```
@@ -203,7 +207,6 @@ fig1<- ggplot(
     linewidth = 0.5, width = 0.6, alpha = 0.8, na.rm=T,
     outlier.shape = NA)+
   labs(x = "Neighbourhood",y = "Price(in EUR)") +
-    #scale_fill_brewer(type = "qual", palette = "Purples")+
   theme_bw()
 fig1
 
@@ -228,6 +231,10 @@ dt <- dt %>% mutate(dist = distHaversine(cbind(dt$longitude, dt$latitude), c(lon
 ```
 
 There seems to be a trend with some possible outliers in a long distance. This can be explained by the municipal borders of Rome being at the sea coast, which is also a popular destination and where Fiumicino aiport is located. 
+
+
+**(i wouldn't include the distance bin scatter)**
+
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 fig2<- ggplot(dt, aes(x = dist, y=price)) +
@@ -258,7 +265,7 @@ fig4<- ggplot(dt, aes(x = dist, y=price)) +
 fig4
 ```
 
-#### Correlation
+### Correlation
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 numeric_dt <- keep( dt, is.numeric )
@@ -273,7 +280,7 @@ melted_cormat <- melt(upper_tri, na.rm = TRUE)
 cormat_price <- subset(melted_cormat, grepl("price", Var1) | grepl("price", Var2)) %>% 
   arrange(desc(value))
 
-print(cormat_price)
+
 
 cormat<- ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) +
   geom_tile(color = "white") +
@@ -285,14 +292,13 @@ cormat<- ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) +
 print(cormat)
 
 
-cormat<- ggplot(data = cormat_price, aes(x=Var1, y=Var2, fill=value)) +
+cormat_p<- ggplot(data = cormat_price, aes(x=Var1, y=Var2, fill=value)) +
   geom_tile(color = "white") +
   scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1,1), space = "Lab", name="Pearson\nCorrelation") +
   theme_minimal()+
   theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust = 1))+
   coord_fixed()+
   ggtitle("Correlation Matrix")
-print(cormat)
 
 
 ```
@@ -318,11 +324,11 @@ data_holdout <- dt[-train_indices, ]
 ```
 
 
-### Models
+## Models
 
 The predictive models of choice are OLS, LASSO and Random Forest. The OLS regression is run according to 4 models of increasing complexity. 
 
-#### 1. OLS
+### 1. OLS
 
 We prepared 4 OLS models with an increasing number of features included. The last model was chosen for further comparison based on best RMSE and BIC. To run the OLS, a 5-fold cross-validation approach was chosen as producing the best results. 
 
@@ -355,7 +361,7 @@ models <- c("reg1", "reg2","reg3", "reg4","reg5")
 
 Through the cross validations, we set the number of folds at 5.
 
-```{r echo=TRUE, message=FALSE, warning=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 
 # set number of folds
 
@@ -393,8 +399,7 @@ for(i in 1:5) {
   ))
 }
 
-
-ols_summary 
+knitr::kable(ols_summary, caption = "TITLE", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
 ```
 
 
@@ -408,7 +413,7 @@ Our 5th OLS model has the lowest RMSE and will be taken further to be compared b
 best_ols <- ols_summary[5,]
 ```
 
-#### 2. Lasso
+### 2. Lasso
 
 LASSO method is used to ensure a better fit and minimise the sum of squared residuals. It is a regression analysis method that performs both variable selection and regularization in order to enhance the prediction accuracy and interpretability of the resulting statistical model. 
 
@@ -441,7 +446,7 @@ lasso_coeffs <- coef(lasso_model$finalModel, lasso_model$bestTune$lambda) %>%
   rownames_to_column(var = "variable") %>%
   rename(coefficient = `s1`)  
 
-print(lasso_coeffs)
+
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
@@ -461,7 +466,7 @@ lasso_summary <-  data.table(
 
 ```
 
-#### 3. Random Forest
+### 3. Random Forest
 
 We later use a bagging algorithm Random Forest to further fine-tune our model. Random Forest tends to perform better than OLS with non-linear patterns in the data, as well as showed us better results on RMSE than LASSO.
 ```{r message=FALSE, warning=FALSE, include=FALSE}
@@ -491,7 +496,6 @@ system.time({
 })
 rf_model
 
-print(rf_model$results)
 ```
 
 Random forest best result has 7 predictors when selecting model4 formula, with 7 variables.
@@ -510,7 +514,7 @@ forest_summary <-  data.table(
     BIC = NA)
 
 
-print(forest_summary)
+knitr::kable( forest_summary, caption = "TITLE", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
 
 ```
 
@@ -538,7 +542,7 @@ for (i in 1:length(diff_models)) {
 
 
 summary_all$Model <- c("OLS","LASSO","Random Forest")
-summary_all
+knitr::kable( summary_all, caption = "TITLE", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
 ```
 
 ### Diagnostics
@@ -576,7 +580,7 @@ data_holdout <- data_holdout %>%
 
  
 
-RMSE(data_holdout$predicted_price,data_holdout$price)
+print(paste("RMSE value for the holdout dataset:",RMSE(data_holdout$predicted_price,data_holdout$price)))
 
 
 ```
@@ -633,8 +637,8 @@ data_extra <- data_extra %>%
                           mean(data_extra$future_price, na.rm = T), 
                           future_price))
 
+knitr::kable(summary(data_extra$future_price), caption = "TITLE", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
 
-summary(data_extra$future_price)
 
 ```
 
@@ -651,7 +655,7 @@ valid <- data.frame(
   Future_Data_RMSE = c(futureOLS, futureLASSO, futureRF)
 )
 
-valid
+
 
 knitr::kable(valid, caption = "TITLE", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
 ```
@@ -688,5 +692,17 @@ ggplot(data = data_long, aes(x = Price, color = Series)) +
   theme_classic()
 ```
 
+### APPENDIX
 
+```{r}
+print(cormat_price) 
+```
+
+```{r}
+modelsummary::msummary(list(reg1,reg2,reg3,reg4,reg5), stars = T, output = kableExtra)
+```
+
+```{r}
+print(lasso_coeffs)
+```
 
