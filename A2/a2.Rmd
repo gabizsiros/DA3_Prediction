@@ -337,7 +337,7 @@ data_holdout <- dt[-train_indices, ]
 
 ### 1. OLS
 
-We prepared 4 OLS models with an increasing number of features included. The last model was chosen for further comparison based on best RMSE and BIC. To run the OLS, a 5-fold cross-validation approach was chosen as producing the best results. 
+We prepared 5 OLS models with an increasing number of features included. The last model was chosen for further comparison based on best RMSE and BIC. To run the OLS, a 5-fold cross-validation approach was chosen as producing the best results. 
 
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
