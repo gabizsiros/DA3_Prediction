@@ -319,7 +319,7 @@ longterm booking possible, minimum_nights, self check-in, kitchen.
 
 ## Models
 
-The predictive models of choice are OLS, LASSO and Random Forest. The OLS regression is run according to 4 models of increasing complexity. 
+The predictive models of choice are OLS, LASSO and Random Forest. The OLS regression is run according to 5 models of increasing complexity. 
 
 ### Holdout
 
