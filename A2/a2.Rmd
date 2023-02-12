@@ -2,7 +2,9 @@
 title: "Building prediction models for Airbnb bussiness in Rome"
 author: "Gabriella Zsiros , Hanna Asipovich"
 date: "2023-02-07"
-output: html_document
+output:
+  prettydoc::html_pretty:
+theme: cayman
 ---
 
 ```{r setup, include=FALSE}
@@ -38,7 +40,7 @@ library(ranger)
 
 ## Introduction
 
-In this assignment we use the airbnb dataset from: http://insideairbnb.com/get-the-data.html We chose the city of Rome with more than 24,000 number of observations. We built 3 models to predict the price of accommodation per night for a midsize apartment and discuss their performance.
+In this assignment we use the airbnb dataset from: http://insideairbnb.com/get-the-data.html We chose the city of Rome with more than 24,000 number of observations. We built 3 models (OLS, LASSO, RF) to predict the price of accommodation per night for a midsize apartment and discuss their performance. For the complete code of the assignment see the Github repository: https://github.com/gabizsiros/DA3_Prediction/tree/main/A2
 
 ### Data exploration
 
@@ -51,7 +53,7 @@ listings <- read.csv('listings.csv')
 
 We are looking at the different variables that can be later used as predictors. One of the important drives was to clean the data in a way that results in numerical variables. One of the challenges was the category of bathrooms, where we found values as 0, "half" bathrooms or empty data. 
  
-Number of minimum nights is also an interesting feature where we could suspect to have outliers with values of more hundred, as minimum number of nights that can be booked. Long-term renting of Airbnbs might skew our findings and is not likely to be relevant to the business case. 
+Number of minimum nights is also an interesting feature where we could suspect to have outliers with values above 100 as minimum number of nights that can be booked. Long-term renting of Airbnbs might skew our findings and is not likely to be relevant to the business case. 
 
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 #amenities <- unique(listings$amenities)
@@ -99,11 +101,9 @@ dt$neighbourhood <- as.factor(dt$neighbourhood)
 
 fct_count(dt$neighbourhood, sort = T, prop = T) # 56% is in city center
 ```
-
-
 When it came to the decision about the bathroom categorization, we came to an agreement that we disregard whether it says private or not, since we already filtered for entire homes. 
 
-Large number of bathrooms will also fall out as we get rid of outliers we deem not needed. Missing values were replaced with the median (some NAs were introduced by coercing to number), and the few 0 values were replaced with 1, with the reasoning that they were likely to be errors as most homes for short term rent have bathroom (1 happens to be the median value anyway)
+Large number of bathrooms will also fall out as we get rid of outliers we deem not needed. Missing values were replaced with the median (some NAs were introduced by coercing to number), and the few 0 values were replaced with 1, with the reasoning that they were likely to be errors as most homes for short-term rent have bathroom (1 happens to be the median value, anyway).
 
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 #Transforming data on available bathrooms in the property into integer
@@ -123,9 +123,9 @@ dt <- dt %>%
 
 ```
 
-Price was transformed into a numeric value and we introduces some important dummies for certain amenities, such as Wifi, free parking and air conditioning.
+Price was transformed into a numeric value and we introduced some dummies for important amenities, such as Wifi, free parking and air conditioning.
 
-When creating the dummy variables, we took a look at the amenities string dump and with come data cleaning on the text we set aside the amenties that are provided in the listings on a frequent basis, then decided based on real life experiece, what could be a price-affecting factor.
+When creating the dummy variables, we took a look at the amenities string dump and with come data cleaning on the text, we set aside the amenties that are provided in the listings on a frequent basis. Then we decided based on real life experiece, what could be a price-affecting factor and considered those.
 
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 #Transform price into numeric
@@ -198,7 +198,7 @@ fig3
 
 ```
 
-When explorint the price relationship with factors, we can see that the neighbourhood has an effect on price. 
+When exploring the price relationship with factors, we can see that the neighbourhood has an effect on price. 
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 
@@ -216,7 +216,7 @@ fig1
 
 ```
 
-With `geosphere` package we introduce  a numerical value that can represent the location of the apartment other than the factorized neighbourhood to be later used for the "distance to the center" feature. Considering that a large par of our listings is located in the first district, **Centro Storico**, we introduced a dummy variable to better facilitate CART based models. 
+With `geosphere` package we introduce  a numerical value that can represent the location of the apartment other than the factorized neighbourhood to be later used for the "distance to the center" feature. Considering that a large part of our listings is located in the first district, **Centro Storico**, we introduced a dummy variable to better facilitate CART based models. 
 
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 #Loading data on the distance to the center 
@@ -308,13 +308,13 @@ cormat_p<- ggplot(data = cormat_price, aes(x=Var1, y=Var2, fill=value)) +
 
 ```
 
-Highest correlations:  
+Highest correlations were shown by:  
 Bathroom numbers, accomodates, distance, is_center (|.21| - |.37|)  
 ac, free parking, wifi (|.16| - |.09|)  
 coffeemaker, balcony, breakfast, microwave (|.08| - |.04|)  
 longterm booking possible, minimum_nights, self check-in, kitchen. 
 
-(some negative correlations does not seem reasonable)
+(some of negative correlations does not seem reasonable)
 
 
 ## Models
@@ -323,7 +323,7 @@ The predictive models of choice are OLS, LASSO and Random Forest. The OLS regres
 
 ### Holdout
 
-We create a holdout set as a random 15% of our cleaned data table, resulting approximately 2000 observations for the holdout. 
+We created a holdout set as a random 15% of our cleaned data table, resulting in approximately 2,000 observations for the holdout. 
 
 ```{r}
 set.seed(1927)
@@ -387,7 +387,7 @@ cv <- c("cv1", "cv2", "cv3", "cv4", "cv5")
 modelsummary::msummary(list(reg1,reg2,reg3,reg4,reg5), stars = T)
 ```
 
-Our modelsummary confirms the significants of variables through correlations. Factorizing the neighborhoods seems to improve the preformance. 
+Our modelsummary confirms the significance of variables through correlations. Factorizing the neighborhoods seems to improve the performance. 
 
 ```{r}
 variables <- c(4,7,11,15,16)
@@ -413,7 +413,7 @@ knitr::kable(ols_summary, caption = "OLS summary", digits = 4 ) %>% kable_stylin
 Our 5th OLS model has the lowest RMSE and will be taken further to be compared between LASSO and Random Forest to find the best predicting model.
 
 ```{r message=FALSE, warning=FALSE, include=FALSE}
-### keep 4th model
+### keep 5th model
 
 best_ols <- ols_summary[5,]
 ```
@@ -422,7 +422,7 @@ best_ols <- ols_summary[5,]
 
 LASSO method is used to ensure a better fit and minimise the sum of squared residuals. It is a regression analysis method that performs both variable selection and regularization in order to enhance the prediction accuracy and interpretability of the resulting statistical model. 
 
-As our second model, we selected LASSO as it penalizes over-fitting. The model iterates through various values for lambda, with 0.05 steps between 0 and 1
+As our second model, we selected LASSO as it penalizes over-fitting. The model iterates through various values for lambda, with 0.05 steps between 0 and 1.
 
 ```{r echo=FALSE, include = TRUE, message=FALSE, warning=FALSE}
 
@@ -473,7 +473,8 @@ lasso_summary <-  data.table(
 
 ### 3. Random Forest
 
-We later use a bagging algorithm Random Forest to further fine-tune our model. Random Forest tends to perform better than OLS with non-linear patterns in the data, as well as showed us better results on RMSE than LASSO. While OLS and LASSO could handle the neighborhood variables a factors, we decided to focus on the first district as a binary decision point when making the  regression trees. Here we take our model with the most vaiable, which does not contain the neighbourhoods as factors.
+We later use a bagging algorithm Random Forest to further fine-tune our model. Random Forest tends to perform better than OLS with non-linear patterns in the data, as well as showed us better results on RMSE than LASSO. While OLS and LASSO could handle the neighborhood variables as factors, we decided to focus on the first district as a binary decision point when making the  regression trees. Here we take our model with the most vaiable, which does not contain the neighbourhoods as factors.
+
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 #setting train control
 train_control <- trainControl(method = "cv",
@@ -503,7 +504,7 @@ rf_model
 
 ```
 
-Random forest best result has 5 predictors when selecting model4 formula (with 15 variables).
+Random forest's best result has 5 predictors when selecting model 5 formula (with 15 variables).
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 
