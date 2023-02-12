@@ -504,7 +504,7 @@ rf_model
 
 ```
 
-Random forest's best result has 5 predictors when selecting model 5 formula (with 15 variables).
+Random forest's best result has 5 predictors when selecting model 4 formula (with 15 variables).
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 
