@@ -48,7 +48,8 @@ df <- read.csv('https://osf.io/3qyut/download')
 
 
 ```{r}
-summary(df)
+# summary
+skimr::skim(data)
 
 #how many has full balance sheet 
 table(df$balsheet_notfullyear)
@@ -82,3 +83,7 @@ Tangible assets: Companies with higher tangible assets may have the resources to
 Inventories: Increasing inventories can indicate that a company is preparing for future sales growth.
 
 Personnel expenditure: Companies that invest in their employees may have a more skilled and motivated workforce that can support fast growth.
+
+
+
+Let's plot total sales increase in sales, income, sh equity, 
