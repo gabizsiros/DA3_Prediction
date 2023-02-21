@@ -1,0 +1,84 @@
+---
+title: "HW3"
+author: "Zsiros, Gabriella"
+date: "2023-02-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Target: 
+
+predict fast growth of firms 
+2010-2015
+
+Structure:
+
+# PART I: Probability prediction
+## Probability prediction
+Predict probabilities
+## Cross-validation
+Look at cross-validated performance and pick your favorite model
+# PART II: Classification
+## Loss function
+Think about the business problem, and define your loss function 
+(like FP=X dollars, FN=Y dollars)
+## Classification threshold
+For each model, predict probabilities, look for the optimal 
+classification threshold, calculate expected loss with your loss function. 
+## Average exprected loss
+Pick the model that has the smallest average (over 5 folds) expected loss
+# PART III Discussion of results
+## Confusion table 
+Show a confusion table (on a selected fold or holdout set)
+## Evaluation
+Discuss results, evaluate how useful your model may be
+
+```{r}
+#libraries
+```
+
+
+```{r}
+#data read
+df <- read.csv('https://osf.io/3qyut/download')
+```
+
+
+```{r}
+summary(df)
+
+#how many has full balance sheet 
+table(df$balsheet_notfullyear)
+```
+
+
+
+
+financial variables are: cost of goods, amortization, current assets, 
+current liabilities, exptra expenditure, extra income, extra profit loss, 
+finished production, fixed assets, income before tax, intangible assets, 
+inventories, liquid assets, material expenditure, net domestic sales, 
+net export sales, personnel expenditure, profit/loss annual, total sales, 
+shareholder equity, subscribed capital, tangible assets, wage bill
+
+non numeric: balance sheet,  firm founded, exit year, number of CEO, 
+share of foreign CEO, share of female CEO, avg birth year of CEO, 
+average office time of CEOs, gender, CEO origin, HQ, HQ region,  (num) 
+
+
+Possible growth influencing factors:
+
+Total sales: Companies with increasing sales are more likely to experience fast growth.
+
+Income before tax: A higher income before tax can indicate a company's ability to reinvest in its business and support growth.
+
+Shareholder equity: Higher shareholder equity can indicate a company's ability to raise funds to support growth.
+
+Tangible assets: Companies with higher tangible assets may have the resources to invest in growth opportunities.
+
+Inventories: Increasing inventories can indicate that a company is preparing for future sales growth.
+
+Personnel expenditure: Companies that invest in their employees may have a more skilled and motivated workforce that can support fast growth.
