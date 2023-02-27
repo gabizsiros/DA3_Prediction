@@ -38,23 +38,33 @@ Discuss results, evaluate how useful your model may be
 
 ```{r}
 #libraries
+library(tidyverse)
+library(skimr)
+library(caret)
+library(modelsummary)
+library(pROC)
+library(glmnet)
 ```
 
 
 ```{r}
 #data read
-df <- read.csv('https://osf.io/3qyut/download')
+df <- as.data.frame(read.csv('https://osf.io/3qyut/download'))
 ```
 
 
 ```{r}
 # summary
-skimr::skim(data)
+skimr::skim(df)
 
 #how many has full balance sheet 
 table(df$balsheet_notfullyear)
-```
 
+table(df$ind2, useNA = "ifany")
+table(df$year)
+
+```
+about one in ten doesn't have a full balance sheet
 
 
 
@@ -84,6 +94,677 @@ Inventories: Increasing inventories can indicate that a company is preparing for
 
 Personnel expenditure: Companies that invest in their employees may have a more skilled and motivated workforce that can support fast growth.
 
+1. check year span
+2. Select 2010-2015
+3. drop variables with many NAs? 
+4. Complete NAs (tidyr::compelte)
+5. New variables, new firm
+6. aggregate industries?
+7. negative asset can't be
+8. total asset
+9- growth rate in ln sales
+
+```{r}
+#filter for years 2010-2015
+df <- df %>% filter(year >= 2010 & year <= 2015)
+
+```
 
 
-Let's plot total sales increase in sales, income, sh equity, 
+- plot total sales increase in sales, income, sh equity, 
+
+
+
+```{r}
+table(df$ind2)
+```
+
+
+```{r}
+
+ggplot(df, aes(x = year, y = sales)) + geom_col(aes(fill = as.factor(ind))) + theme_bw()
+
+
+#(df, ind == 2)
+```
+
+
+
+
+
+
+```{r}
+df$urban_m <- as.factor(df$urban_m)
+df$region_m <-  as.factor(df$region_m)
+df$gender <- as.factor(df$gender)
+
+```
+
+
+After getting rid of incomplete variables, 4 still remains in questions, where still 10% is missing: founded_year, ceo_count, foreign, female. 
+
+```{r}
+#imputing missing values:
+
+
+df$ceo_count[is.na(df$ceo_count)] <- median(df$ceo_count,na.rm = T)
+df$sales[is.na(df$sales)] <- mean(df$sales, na.rm = T)
+#df$inoffice_days[is.na(inoffice_days)] <- mean(df$inoffice_days, na.rm = T)
+
+table(df$foreign)
+df <- df %>%
+  mutate( foreign = ifelse(is.na(df$foreign),0, foreign))
+
+table(df$female)
+
+df <- df %>%
+  mutate( female = ifelse(is.na(df$female),0, female))
+
+
+df$founded_year[is.na(df$founded_year)] <-substr(df$founded_date,1,4)
+df$founded_year <- as.numeric(df$founded_year)
+
+summary(df$inoffice_days)
+
+```
+```{r}
+
+#plotting difderences
+
+cols_to_drop <- skimr::skim(df) %>% filter(complete_rate < 0.9) %>% pull(skim_variable)
+
+
+df <- df[, !(names(df) %in% cols_to_drop)]
+
+skim <- skimr::skim(df)
+```
+
+
+
+caluclating ln
+
+5 datapont has sales less than 0. SOme sales data is 0, tor that we take log as 0.
+
+```{r}
+
+df$sales <- ifelse(df$sales <0, 0, df$sales)
+df <- df %>% mutate( ln_sales = ifelse(sales == 0, 0,log(sales)), .after= sales)
+
+
+df <- df %>%
+  mutate(sales_mil=sales/1000000, .after = ln_sales)
+
+df <- df %>%
+  mutate(sales_mil_log = ifelse(sales > 0, log(sales_mil), 0), .after=sales_mil)
+
+
+skimr::skim(df$sales)
+
+```
+
+impute values at 97% completion
+
+```{r}
+
+
+df$amort[is.na(df$amort)] <- mean(df$amort, na.rm = T)
+df$extra_exp[is.na(df$extra_exp)] <- mean(df$extra_exp, na.rm = T)
+df$extra_inc[is.na(df$extra_inc)] <- mean(df$extra_inc, na.rm = T)
+df$extra_profit_loss[is.na(df$extra_profit_loss)] <- mean(df$extra_profit_loss, na.rm = T)
+df$material_exp[is.na(df$material_exp)] <- mean(df$material_exp, na.rm = T)
+df$personnel_exp[is.na(df$personnel_exp)] <- mean(df$personnel_exp, na.rm = T)
+df$inc_bef_tax [is.na(df$inc_bef_tax )] <- mean(df$inc_bef_tax , na.rm = T)
+
+
+df$ind[is.na(df$ind)] <- "NA"
+
+
+```
+
+
+
+
+calculating growth:
+```{r}
+
+df <- df %>%
+  group_by(comp_id) %>%
+  mutate(sales_growth1 = (ln_sales - lag(ln_sales)), 
+         .after= ln_sales) %>% ungroup
+
+
+#remove NA-s
+df <- df %>% filter(!is.na(sales_growth1))
+
+
+```
+
+df <- df %>%
+  group_by(comp_id) %>%
+  mutate(sales_growth2 = ifelse(sales != 0,(sales - lag(sales))/sales, 0),
+        .after= sales_growth1)  %>% ungroup
+
+df <- df %>%  select(-c(sales_growth2))
+
+
+`
+
+ggplot(subset(df,year == 2012)) + 
+ stat_bin(aes(x = sales_growth1, y = sales_growth2))
+
+summary(df$sales_growth1)
+        
+summary(df$sales_growth2)
+
+```{r}
+df <-df  %>%
+  mutate(flag_asset_problem=ifelse(intang_assets<0 | curr_assets<0 | fixed_assets<0,1,0  ))
+table(df$flag_asset_problem)
+
+df <- df %>%
+  mutate(intang_assets = ifelse(intang_assets < 0, 0, intang_assets),
+         curr_assets = ifelse(curr_assets < 0, 0, curr_assets),
+         fixed_assets = ifelse(fixed_assets < 0, 0, fixed_assets))
+```
+
+
+```{r}
+# generate total assets
+# divide all pl_names elements by sales and create new column for it
+
+pl_names <- c("extra_exp","extra_inc",  "extra_profit_loss", "inc_bef_tax" ,"inventories",
+              "material_exp", "profit_loss_year", "personnel_exp")
+bs_names <- c("intang_assets", "curr_liab", "fixed_assets", "liq_assets", "curr_assets",
+              "share_eq", "subscribed_cap", "tang_assets" )
+
+
+df <- df %>%
+  mutate(total_assets = intang_assets + curr_assets + fixed_assets)
+
+
+
+df <- df %>%
+ mutate_at(vars(pl_names), funs("pl" = ifelse(sales > 0, ./sales, 0)))
+
+# divide all bs_names elements by total_assets and create new column for it
+df <- df %>%
+  mutate_at(vars(bs_names), funs("bs"=ifelse(total_assets == 0, 0, ./total_assets)))
+
+```
+
+
+
+
+```{r}
+# Variables that represent accounting items that cannot be negative (e.g. materials)
+zero <-  c("extra_exp_pl", "extra_inc_pl", "inventories_pl", "material_exp_pl", "personnel_exp_pl",
+           "curr_liab_bs", "fixed_assets_bs", "liq_assets_bs", "curr_assets_bs", "subscribed_cap_bs",
+           "intang_assets_bs")
+
+df <- df %>%
+  mutate_at(vars(zero), funs("flag_high"= as.numeric(.> 1))) %>%
+  mutate_at(vars(zero), funs(ifelse(.> 1, 1, .))) %>%
+  mutate_at(vars(zero), funs("flag_error"= as.numeric(.< 0))) %>%
+  mutate_at(vars(zero), funs(ifelse(.< 0, 0, .)))
+
+
+# for vars that could be any, but are mostly between -1 and 1
+any <-  c("extra_profit_loss_pl", "inc_bef_tax_pl", "profit_loss_year_pl", "share_eq_bs")
+
+df <- df %>%
+  mutate_at(vars(any), funs("flag_low"= as.numeric(.< -1))) %>%
+  mutate_at(vars(any), funs(ifelse(.< -1, -1, .))) %>%
+  mutate_at(vars(any), funs("flag_high"= as.numeric(.> 1))) %>%
+  mutate_at(vars(any), funs(ifelse(.> 1, 1, .))) %>%
+  mutate_at(vars(any), funs("flag_zero"= as.numeric(.== 0))) %>%
+  mutate_at(vars(any), funs("quad"= .^2))
+
+
+# dropping flags with no variation
+variances<- df %>%
+  select(contains("flag")) %>%
+  apply(2, var, na.rm = TRUE) == 0
+
+df <- df %>%
+  select(-one_of(names(variances)[variances]))
+```
+
+99% Percentile at 22M , max valie 111 m
+
+
+```{r}
+summary(df$sales_mil)
+print(quantile(df$sales_mil,c(.01,.05,.1,.25,.5,.75,.9,.95,.99), na.rm = T))
+df <- subset(df, sales_mil <= 23)
+```
+
+```{r}
+df <- df %>%
+  mutate(sales_mil_sq=sales_mil^2)
+```
+
+
+```{r}
+data <- subset(df, year == 2013)
+```
+
+
+```{r}
+summary(data$sales_growth1)
+
+ggplot(data) +
+  geom_density(aes(x = sales_growth1))
+
+ggplot(data) +
+  stat_bin(aes(x = sales_mil))
+
+ggplot(data) +
+  stat_bin(aes(x = sales_mil_sq))
+```
+
+
+```{r}
+#defining target
+data <- data %>% mutate(fast_growth = ifelse(sales_growth1 > 0.2,1,0))
+
+data <- data %>%
+  filter(!is.na(fast_growth))
+
+table(data$fast_growth)
+
+ggplot(data,aes(x = fast_growth)) + 
+  geom_bar(aes( y = ..count.. / sum( count ) )) +
+    labs(y='Probability',x='Fast growth')+
+  scale_y_continuous(
+    labels = scales::percent_format(accuracy =1 ), 
+    limits = c(0,1)
+  ) + 
+  theme_bw()
+
+
+
+```
+### 
+
+```{r}
+
+ggplot(data, aes(x = founded_year)) +
+  geom_col(aes(y = sales_mil, fill = as.factor(fast_growth))) + theme_bw()
+    
+  
+```
+
+```{r}
+ggplot(data) +
+  geom_point(aes(x= profit_loss_year, y = sales_mil))+
+  facet_wrap(~ fast_growth) + theme_bw()
+```
+```{r}
+ggplot(subset(data, total_assets < 40000000),aes(x= total_assets, y = sales_mil)) +
+  geom_point()+
+  geom_smooth(method= "lm") +
+  facet_wrap(~ fast_growth) + theme_bw()
+
+summary(data$total_assets)
+```
+
+```{r}
+ggplot(data)+
+  geom_bar(aes(x = sales_mil_log, fill = fast_growth)) +
+  facet_wrap(~ind)
+```
+
+
+
+
+```{r}
+cols_w_na <- skimr::skim(df) %>% filter(n_missing > 0) %>% pull(skim_variable)
+
+
+for (col in cols_w_na) {
+  
+  data <- data %>%
+  filter(!is.na(!!sym(col)))
+  
+}
+```
+
+
+### Variables
+
+# MODELLING PREP
+
+# define variable sets 
+# note: we use the factor variable 'ind2_cat'
+
+rawvars <-  c("curr_assets", "curr_liab", "extra_exp", "extra_inc", 
+              "extra_profit_loss", "fixed_assets","inc_bef_tax", 
+              "intang_assets", "inventories", "liq_assets", "material_exp", 
+              "personnel_exp","profit_loss_year", "sales", "share_eq", "subscribed_cap")
+qualityvars <- c("balsheet_flag", "balsheet_length", "balsheet_notfullyear")
+engvar <- c("total_assets_bs", "fixed_assets_bs", "liq_assets_bs", 
+            "curr_assets_bs","share_eq_bs", "subscribed_cap_bs", 
+            "intang_assets_bs", "extra_exp_pl","extra_inc_pl", 
+            "extra_profit_loss_pl", "inc_bef_tax_pl", "inventories_pl",
+            "material_exp_pl", "profit_loss_year_pl", "personnel_exp_pl")
+engvar2 <- c("extra_profit_loss_pl_quad", "inc_bef_tax_pl_quad",
+             "profit_loss_year_pl_quad", "share_eq_bs_quad")
+engvar3 <- c(grep("*flag_low$", names(data), value = TRUE),
+             grep("*flag_high$", names(data), value = TRUE),
+             grep("*flag_error$", names(data), value = TRUE),
+             grep("*flag_zero$", names(data), value = TRUE))
+d1 <-  c("d1_sales_mil_log_mod", "d1_sales_mil_log_mod_sq",
+         "flag_low_d1_sales_mil_log", "flag_high_d1_sales_mil_log")
+hr <- c("female", "ceo_age", "flag_high_ceo_age", "flag_low_ceo_age",
+        "flag_miss_ceo_age", "ceo_count", "labor_avg_mod",
+        "flag_miss_labor_avg", "foreign_management")
+firm <- c("age", "age2", "new", "ind2_cat", "m_region_loc", "urban_m")
+
+# interactions for logit & LASSO
+
+interactions1 <- c("ind2_cat*age", "ind2_cat*age2",
+                   "ind2_cat*d1_sales_mil_log_mod", "ind2_cat*sales_mil_log",
+                   "ind2_cat*ceo_age", "ind2_cat*foreign_management",
+                   "ind2_cat*female",   "ind2_cat*urban_m", 
+                   "ind2_cat*labor_avg_mod")
+interactions2 <- c("sales_mil_log*age", "sales_mil_log*female",
+                   "sales_mil_log*profit_loss_year_pl", 
+                   "sales_mil_log*foreign_management")
+
+X1 <- c("sales_mil_log", "sales_mil_log_sq", "d1_sales_mil_log_mod", 
+        "profit_loss_year_pl", "ind2_cat")
+X2 <- c("sales_mil_log", "sales_mil_log_sq", "d1_sales_mil_log_mod", 
+        "profit_loss_year_pl", "fixed_assets_bs","share_eq_bs",
+        "curr_liab_bs ",   "curr_liab_bs_flag_high ", 
+        "curr_liab_bs_flag_error",  "age","foreign_management" , "ind2_cat")
+X3 <- c("sales_mil_log", "sales_mil_log_sq", firm, engvar,d1)
+X4 <- c("sales_mil_log", "sales_mil_log_sq", firm, engvar, engvar2, 
+        engvar3, d1, hr, qualityvars)
+X5 <- c("sales_mil_log", "sales_mil_log_sq", firm, engvar, engvar2, 
+        engvar3, d1, hr, qualityvars, interactions1, interactions2)
+
+# for LASSO
+logitvars <- c("sales_mil_log", "sales_mil_log_sq", engvar, engvar2, 
+               engvar3, d1, hr, firm, qualityvars, interactions1, interactions2)
+
+# for RF (no interactions, no modified features)
+rfvars  <-  c("sales_mil", "d1_sales_mil_log", rawvars, hr, firm, qualityvars)
+
+
+
+```{r}
+
+engvar <- c("total_assets", "fixed_assets_bs", "liq_assets_bs", 
+            "curr_assets_bs","share_eq_bs", "subscribed_cap_bs", 
+            "intang_assets_bs", "extra_exp_pl","extra_inc_pl", 
+            "extra_profit_loss_pl", "inc_bef_tax_pl", "inventories_pl",
+            "material_exp_pl", "profit_loss_year_pl", "personnel_exp_pl")
+
+interactions <- c("ind2*sales_mil_log", "ind2*region_m", "female*gender", "foreign*urban_m")
+
+X1 <- c("sales_mil","sales_mil_log", "profit_loss_year_pl", "total_assets")
+X2 <- c(X1, "sales_mil_sq","founded_year", "ind2", "region_m")
+X3 <- c(X2,engvar)
+X4 <- c(X3,"female","foreign", "urban_m", "ceo_count", "gender")
+X5 <- c(X4, interactions)
+
+```
+
+##modeling
+
+
+```{r}
+
+set.seed(1927)
+
+train_indices <- as.integer(createDataPartition(data$fast_growth, p = 0.8, list = FALSE))
+data_train <- data[train_indices, ]
+data_holdout <- data[-train_indices, ]
+
+```
+
+
+
+```{r}
+ols1 <- lm(formula(paste0("fast_growth ~", paste0(X1, collapse = " + "))),
+                data = data_train)
+ols2 <- lm(formula(paste0("fast_growth ~", paste0(X2, collapse = " + "))),
+                data = data_train)
+ols3 <- lm(formula(paste0("fast_growth ~", paste0(X3, collapse = " + "))),
+                data = data_train)
+ols4 <- lm(formula(paste0("fast_growth ~", paste0(X4, collapse = " + "))),
+                data = data_train)
+ols5 <- lm(formula(paste0("fast_growth ~", paste0(X5, collapse = " + "))),
+                data = data_train)
+
+
+models <- list(ols1, ols2, ols3, ols4, ols5)
+
+modelsummary::msummary(models)
+
+```
+
+
+
+```{r}
+glm_modelx5 <- glm(formula(paste0("fast_growth ~", paste0(X5, collapse = " + "))),
+                   data = data, family = "binomial")
+summary(glm_modelx5)
+```
+
+
+## Probability
+```{r}
+train_control <- trainControl(
+  method = "cv",
+  number = 5,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary,
+  savePredictions = TRUE
+)
+
+
+# all logit models 
+
+logit_model_vars <- list("X1" = X1, "X2" = X2, "X3" = X3, "X4" = X4, "X5" = X5)
+
+```
+
+
+
+```{r}
+# calculate metrics and store them in containers
+
+logit_model_vars <- list("X1" = X1, "X2" = X2, "X3" = X3, "X4" = X4, "X5" = X5)
+
+
+# calculate metrics and store them in containers
+
+logit_models <- list()
+CV_RMSE_folds <- list()
+CV_AUC_folds <- list()
+
+data_train$fast_growth <- as.factor(data_train$fast_growth)
+levels(data_train$fast_growth) <- make.names(levels(data_train$fast_growth))
+# run models and get RMSE for each fold for each model
+
+for (model_name in names(logit_model_vars)) {
+
+  features <- logit_model_vars[[model_name]]
+  
+  print(paste0('Model: ', model_name, ', number of features: ', length(features)))
+  
+  set.seed(20230208)
+  glm_model <- train(
+    formula(paste0("fast_growth ~", paste0(features, collapse = " + "))),
+    method = "glm",
+    data = data_train,
+    family = "binomial",
+    trControl = train_control
+  )
+
+  logit_models[[model_name]] <- glm_model
+  # Calculate RMSE on test for each fold
+  CV_RMSE_folds[[model_name]] <- glm_model$resample[,c("Resample", "ROC")]
+  print(paste0('CV ROC: ', glm_model$resample$ROC))
+  print('  ')
+}
+
+
+glm_modelx5 <- glm(formula(paste0("fast_growth ~", paste0(X5, collapse = " + "))),
+                   data = data, family = "binomial")
+
+```
+
+
+```{r}
+lambda <- 10^seq(-1, -4, length = 10)
+grid <- expand.grid("alpha" = 1, lambda = lambda)
+
+set.seed(20230208)
+system.time({
+  logit_lasso_model <- train(
+    formula(paste0("fast_growth ~", paste0(X5, collapse = " + "))),
+    data = data_train,
+    method = "glmnet",
+    preProcess = c("center", "scale"),
+    family = "binomial",
+    trControl = train_control,
+    tuneGrid = grid,
+    na.action=na.exclude
+  )
+})
+```
+```{r}
+tuned_logit_lasso_model <- logit_lasso_model$finalModel
+best_lambda <- logit_lasso_model$bestTune$lambda
+logit_models[["LASSO"]] <- logit_lasso_model
+lasso_coeffs <- as.matrix(coef(tuned_logit_lasso_model, best_lambda))
+
+CV_RMSE_folds[["LASSO"]] <- logit_lasso_model$resample[,c("Resample", "ROC")]
+```
+
+```{r}
+
+
+
+CV_AUC <- list()
+for (model_name in names(logit_models)) {
+  auc <- list()
+  model <- logit_models[[model_name]]
+  for (fold in c("Fold1", "Fold2", "Fold3", "Fold4", "Fold5")) {
+    # get the prediction from each fold
+    cv_fold <- model$pred %>% filter(Resample == fold)
+    cv_fold$pred <- as.ordered(cv_fold$pred)
+    # calculate the roc curve
+    roc_obj <- roc(cv_fold$obs, cv_fold$pred, quiet = TRUE)
+    # save the AUC value
+    auc[[fold]] <- as.numeric(roc_obj$auc)
+  }
+  mean_auc <- mean(unlist(auc))
+  CV_AUC[[model_name]] <- mean_auc
+}
+
+cV_AUC
+    
+```
+```{r}
+best_logit_no_loss <- logit_models[["X5"]]
+
+logit_predicted_probabilities_holdout <- predict(
+  best_logit_no_loss, newdata = data_holdout, type = "prob")
+data_holdout[,"best_logit_no_loss_pred"] <- logit_predicted_probabilities_holdout[,"X1"]
+RMSE(data_holdout[, "best_logit_no_loss_pred", drop=TRUE], data_holdout$fast_growth)
+
+```
+```{r}
+
+
+ggplot(data_holdout, aes(x = best_logit_no_loss_pred, y =fast_growth))+
+         geom_point()
+  #n_bins = 10
+```
+```{r}
+
+# 2.2 confusion matrix
+# default threshold: 0.5
+
+logit_class_prediction <- predict(best_logit_no_loss, newdata = data_holdout)
+summary(logit_class_prediction)
+
+```
+```{r}
+
+data_holdout$fast_growth <- 
+ as.factor(paste0("X",data_holdout$fast_growth))
+cm_object_1a <- confusionMatrix(logit_class_prediction, as.factor(data_holdout$fast_growth), positive = "X1")
+
+cm_1a <- cm_object_1a$table
+
+rownames(cm_1a) <- c("Actual not fast growth", "Actual fast growth")
+colnames(cm_1a) <- c("Predicted not fast growth", "Predicted fast growth")
+```
+
+
+```{r}
+train_control <- trainControl(
+  method = "cv",
+  n = 5,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary,
+  savePredictions = TRUE,
+  verboseIter = TRUE
+)
+
+tune_grid <- expand.grid(
+  .mtry = c(10, 15, 20), 
+  .splitrule = "gini",
+  .min.node.size = 15 
+)
+
+# optionally, you can go for grid sarch
+# tune_grid <- expand.grid(
+#   .mtry = c(5, 6, 7),
+#   .splitrule = "gini",
+#   .min.node.size = c(10, 15)
+# )
+
+set.seed(1927)
+rf_model_p <- train(
+  formula(paste0("fast_growth ~ ", paste0(X5 , collapse = " + "))),
+  method = "ranger",
+  data = data_train,
+  tuneGrid = tune_grid,
+  trControl = train_control
+)
+
+rf_model_p$results
+
+best_mtry <- rf_model_p$bestTune$mtry
+best_min_node_size <- rf_model_p$bestTune$min.node.size
+
+```
+
+
+##user definded loss function
+
+False positive mean we might invent into a firm which will not have large ROI, it alo ahs an opportuntiy cost of not inventiryn that mones to a firm that is TP Wwhile false negative means that we missed out on an opportunity to invest. 
+```{r}
+
+FP=2
+FN=1
+cost = FN/FP
+
+prevalence <- sum(as.numeric(data_train$fast_growth)) / length(data_train$fast_growth)
+
+
+# ROC curve help us find the optimal threshold with regard to the loss function
+
+best_tresholds <- list()
+expected_loss <- list()
+logit_cv_rocs <- list()
+logit_cv_threshold <- list()
+logit_cv_expected_loss <- list()
+
+```
+
